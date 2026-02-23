@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% set active = "privacy" %}
+
+{% block title %}Конфиденциальность — TG→MAX{% endblock %}
+{% block meta_description %}Политика конфиденциальности сервиса TG→MAX.{% endblock %}
+
+{% block content %}
+<h1>Конфиденциальность</h1>
+<div class="card">
+    <p class="text-muted" style="margin-bottom: 1rem;">TG→MAX заботится о ваших данных.</p>
+    <ul style="padding-left: 1.5rem; margin: 1rem 0; line-height: 1.7;">
+        <li><strong>Сессия Telegram</strong> — хранится в зашифрованном виде и используется только для доступа к выбранным каналам и импорта контента.</li>
+        <li><strong>Токен MAX</strong> — хранится для публикации в выбранный чат; не передаётся третьим лицам.</li>
+        <li><strong>Импортированный контент</strong> — посты и медиа обрабатываются для переноса в MAX и могут временно храниться на сервере до завершения миграции.</li>
+        <li><strong>Логи и метаданные</strong> — для работы сервиса мы можем сохранять логи операций без привязки к персональным данным.</li>
+    </ul>
+    <p class="text-muted" style="font-size: 0.9rem;">Мы не продаём и не передаём ваши данные третьим лицам для маркетинга. По вопросам удаления данных обращайтесь в поддержку.</p>
+</div>
+<p><a href="/" class="btn btn-secondary">← На главную</a></p>
+{% endblock %}

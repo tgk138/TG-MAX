@@ -1,0 +1,53 @@
+<div class="flex mb-2">
+    <span class="status-badge status-{{ data.status }}">{{ data.status }}</span>
+    {% if data.max_target_chat_id %}
+    <span style="color: var(--muted);">→ Chat ID: {{ data.max_target_chat_id }}</span>
+    {% endif %}
+</div>
+
+{% if data.status in ['importing', 'publishing'] %}
+<div class="progress-bar">
+    {% if data.status == 'importing' and data.total_posts > 0 %}
+    <div class="fill" style="width: {{ (data.imported_posts / data.total_posts * 100)|round }}%"></div>
+    {% elif data.status == 'publishing' and data.total_posts > 0 %}
+    <div class="fill" style="width: {{ (data.published_units / data.total_posts * 100)|round }}%"></div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="counters">
+    <div class="counter-item">
+        <div class="num">{{ data.total_posts }}</div>
+        <div class="label">Всего постов</div>
+    </div>
+    <div class="counter-item">
+        <div class="num">{{ data.imported_posts }}</div>
+        <div class="label">Импортировано</div>
+    </div>
+    <div class="counter-item">
+        <div class="num">{{ data.downloaded_media }}</div>
+        <div class="label">Медиа скачано</div>
+    </div>
+    <div class="counter-item">
+        <div class="num">{{ data.published_units }}</div>
+        <div class="label">Опубликовано</div>
+    </div>
+    {% if data.failed_units > 0 %}
+    <div class="counter-item" style="border: 1px solid var(--error);">
+        <div class="num" style="color: var(--error);">{{ data.failed_units }}</div>
+        <div class="label">Ошибки</div>
+    </div>
+    {% endif %}
+</div>
+
+{% if data.events %}
+<h2>Лог событий</h2>
+<div class="events-log">
+    {% for event in data.events %}
+    <div class="event-item event-{{ event.type }}">
+        <span style="color: var(--muted);">{{ event.created_at[:19] if event.created_at else "" }}</span>
+        [{{ event.phase }}] {{ event.message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

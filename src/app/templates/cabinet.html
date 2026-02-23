@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% set active = "cabinet" %}
+
+{% block title %}Кабинет — TG→MAX{% endblock %}
+
+{% block content %}
+<h1>Личный кабинет</h1>
+
+<section class="grid-2">
+    <article class="card">
+        <h2>Профиль Telegram</h2>
+        {% if tg_connected and profile %}
+            <div style="display:flex; gap:0.9rem; align-items:center; flex-wrap:wrap;">
+                {% if avatar_data_url %}
+                <img src="{{ avatar_data_url }}" alt="Аватар Telegram"
+                     style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid #cfe0ff;">
+                {% else %}
+                <div style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:2rem; color:var(--primary); font-weight:700;">
+                    {{ profile.full_name[:1] }}
+                </div>
+                {% endif %}
+                <div>
+                    <div><strong>{{ profile.full_name }}</strong></div>
+                    <div class="text-muted">ID: {{ profile.id }}</div>
+                    <div class="text-muted">Username: {% if profile.username %}@{{ profile.username }}{% else %}не указан{% endif %}</div>
+                    <div class="text-muted">Телефон: {% if profile.phone %}+{{ profile.phone }}{% else %}не указан{% endif %}</div>
+                </div>
+            </div>
+        {% else %}
+            <p class="text-muted mb-1">Telegram ещё не подключен.</p>
+            <a href="/setup" class="btn btn-primary">Перейти в setup</a>
+        {% endif %}
+    </article>
+
+    <article class="card">
+        <h2>Статус подключений</h2>
+        <div class="mb-1">
+            Telegram:
+            {% if tg_connected %}
+                <span class="status-badge status-done">подключен</span>
+            {% else %}
+                <span class="status-badge status-failed">не подключен</span>
+            {% endif %}
+        </div>
+        <div class="mb-2">
+            MAX:
+            {% if max_connected %}
+                <span class="status-badge status-done">подключен{% if max_bot_name %}: {{ max_bot_name }}{% endif %}</span>
+            {% else %}
+                <span class="status-badge status-failed">не подключен</span>
+            {% endif %}
+        </div>
+        <a href="/setup" class="btn btn-secondary">Открыть setup</a>
+    </article>
+</section>
+
+<section class="card">
+    <div class="flex mb-2" style="justify-content: space-between; align-items:center;">
+        <h2 style="margin:0;">Миграции</h2>
+        <a href="/setup" class="btn btn-accent">Новая миграция</a>
+    </div>
+
+    {% if migrations %}
+        <div style="display:grid; gap:0.55rem;">
+            {% for migration in migrations %}
+            <a href="/migration?mid={{ migration.id }}" class="card" style="text-decoration:none; color:inherit; margin:0; box-shadow:none;">
+                <div class="flex" style="justify-content:space-between; align-items:center; gap:0.7rem;">
+                    <div>
+                        <div><strong>{{ migration.tg_channel_title }}</strong></div>
+                        <div class="text-muted">
+                            {% if migration.max_target_chat_id %}
+                                MAX chat: {{ migration.max_target_chat_id }}
+                            {% else %}
+                                MAX цель не выбрана
+                            {% endif %}
+                        </div>
+                        <div class="text-muted">{{ migration.created_at.strftime('%Y-%m-%d %H:%M') if migration.created_at else '' }}</div>
+                    </div>
+                    <span class="status-badge status-{{ migration.status.value }}">{{ migration.status.value }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted">Пока нет миграций. Создайте первую через setup.</p>
+    {% endif %}
+</section>
+{% endblock %}

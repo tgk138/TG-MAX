@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block meta_description %}Перенос каналов и групп из Telegram в мессенджер MAX с сохранением структуры контента.{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}TG→MAX — перенос каналов из Telegram в MAX{% endblock %}">
+    <meta property="og:description" content="Перенос каналов и групп из Telegram в MAX. Без кода, с сохранением структуры контента.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="TG→MAX — перенос каналов из Telegram в MAX">
+    <title>{% block title %}TG→MAX Migration{% endblock %}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    {% block extra_head %}{% endblock %}
+    <style>
+        :root {
+            --bg: #f4f7ff;
+            --surface: #ffffff;
+            --surface-2: #eef2ff;
+            --primary: #1747d1;
+            --primary-2: #0e2f8d;
+            --accent: #ff5a36;
+            --text: #101638;
+            --muted: #6170a0;
+            --success: #0e9f6e;
+            --warn: #c77b0a;
+            --error: #d93025;
+            --radius: 14px;
+            --shadow: 0 12px 30px rgba(23, 71, 209, 0.12);
+            --border: #dfe7ff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Segoe UI", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif;
+            background: radial-gradient(circle at 5% -10%, #dce6ff 0, rgba(220, 230, 255, 0) 38%),
+                        radial-gradient(circle at 100% 0%, #ffe7df 0, rgba(255, 231, 223, 0) 35%),
+                        var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 1.25rem 1rem 2.5rem;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.75rem;
+            padding: 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(6px);
+            box-shadow: var(--shadow);
+        }
+
+        .brand {
+            font-size: 1.2rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            color: var(--primary-2);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+        }
+
+        .nav a.nav-link {
+            color: var(--text);
+            text-decoration: none;
+            padding: 0.5rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            font-weight: 600;
+        }
+
+        .nav a.nav-link:hover {
+            background: var(--surface-2);
+            border-color: var(--border);
+        }
+
+        .nav a.nav-link.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        h1 { font-size: 2rem; margin-bottom: 1rem; }
+        h2 { font-size: 1.25rem; margin-bottom: 0.85rem; color: var(--primary-2); }
+
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem 0.85rem;
+            border: 1px solid #ced7f7;
+            border-radius: 10px;
+            background: #fff;
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 0.65rem;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(23, 71, 209, 0.15);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            padding: 0.72rem 1.15rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            color: #fff;
+            transition: transform 0.1s ease, opacity 0.2s ease;
+        }
+
+        .btn:hover { opacity: 0.95; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+        .btn-primary { background: var(--primary); }
+        .btn-secondary { background: var(--primary-2); }
+        .btn-accent { background: var(--accent); }
+        .btn-danger { background: var(--error); }
+        .btn-success { background: var(--success); }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.2rem 0.65rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+        .status-draft { background: #ecf2ff; color: #2041a7; border-color: #ccdcff; }
+        .status-importing, .status-publishing { background: #fff2de; color: #8e5f0a; border-color: #ffd9a0; }
+        .status-imported { background: #e5efff; color: #1d4ccf; border-color: #c8dcff; }
+        .status-done { background: #def8ef; color: #0f7a56; border-color: #b7efd8; }
+        .status-failed { background: #ffe9e6; color: #a1241c; border-color: #ffc7c0; }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e6ecff;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 0.55rem 0;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #4f73f5);
+            transition: width 0.25s;
+        }
+
+        .events-log {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            margin-top: 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fafcff;
+        }
+
+        .event-item { padding: 0.55rem 0.65rem; border-bottom: 1px solid #ebf0ff; }
+        .event-item:last-child { border-bottom: none; }
+        .event-error { color: var(--error); }
+        .event-warning { color: var(--warn); }
+        .event-info { color: var(--muted); }
+
+        .counters {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.55rem;
+            margin: 0.85rem 0;
+        }
+        .counter-item {
+            padding: 0.55rem;
+            background: #f7f9ff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            text-align: center;
+        }
+        .counter-item .num { font-size: 1.4rem; font-weight: 800; color: var(--primary); }
+        .counter-item .label { font-size: 0.77rem; color: var(--muted); }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .text-muted { color: var(--muted); }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .flex { display: flex; gap: 0.55rem; align-items: center; }
+        .flex-wrap { flex-wrap: wrap; }
+
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+        .spinner { animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .site-footer {
+            margin-top: 2.3rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.9rem;
+            color: var(--muted);
+            display: flex;
+            gap: 1rem 1.5rem;
+            flex-wrap: wrap;
+        }
+        .site-footer a { color: var(--muted); text-decoration: none; }
+        .site-footer a:hover { color: var(--primary-2); }
+
+        @media (max-width: 900px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+            .container { padding: 0.95rem 0.75rem 1.6rem; }
+            h1 { font-size: 1.6rem; }
+            .nav { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="/" class="brand">TG→MAX</a>
+            <div class="nav-links">
+                <a href="/" class="nav-link {% if active == 'home' %}active{% endif %}">Главная</a>
+                <a href="/setup" class="nav-link {% if active == 'setup' %}active{% endif %}">Setup</a>
+                {% if current_user %}
+                    <a href="/cabinet" class="nav-link {% if active == 'cabinet' %}active{% endif %}">Кабинет</a>
+                    <a href="/migration" class="nav-link {% if active == 'migration' %}active{% endif %}">Миграция</a>
+                    <button type="button" class="btn btn-danger" onclick="logoutSession()">Выйти</button>
+                {% else %}
+                    <a href="/terms" class="nav-link {% if active == 'terms' %}active{% endif %}">Условия</a>
+                    <a href="/privacy" class="nav-link {% if active == 'privacy' %}active{% endif %}">Конфиденциальность</a>
+                    <a href="/support" class="nav-link {% if active == 'support' %}active{% endif %}">Поддержка</a>
+                {% endif %}
+            </div>
+        </nav>
+
+        {% block content %}{% endblock %}
+
+        <footer class="site-footer">
+            <span>TG→MAX</span>
+            <a href="/terms">Пользовательское соглашение</a>
+            <a href="/privacy">Конфиденциальность</a>
+            <a href="/support">Поддержка</a>
+        </footer>
+    </div>
+
+    <script>
+        async function logoutSession() {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+            } finally {
+                window.location.href = '/';
+            }
+        }
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

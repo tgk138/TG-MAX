@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% set active = "setup" %}
+
+{% block title %}Setup — TG→MAX{% endblock %}
+{% block meta_description %}Единый setup: Telegram, MAX и выбор каналов для миграции.{% endblock %}
+
+{% block content %}
+<h1>Единый setup</h1>
+<p class="text-muted mb-2">Пройдите три шага: Telegram → MAX → выбор каналов и запуск миграции.</p>
+
+<div id="setup-root" data-flags='{{ setup_flags | tojson }}'>
+    <section class="card" id="step-1">
+        <div class="flex mb-1" style="justify-content: space-between;">
+            <h2>Шаг 1. Авторизация Telegram</h2>
+            <span id="badge-1" class="status-badge status-draft">в процессе</span>
+        </div>
+
+        <div id="phone-block">
+            <input type="tel" id="phone" placeholder="+7 999 123 45 67">
+            <div class="flex flex-wrap">
+                <button class="btn btn-primary" id="send-code-btn">Отправить код</button>
+                <button class="btn btn-secondary" id="start-qr-btn">Войти по QR</button>
+            </div>
+            <p class="text-muted mt-1">Код обычно приходит в приложение Telegram (не SMS).</p>
+        </div>
+
+        <div id="code-block" style="display:none;" class="mt-1">
+            <input type="text" id="code" placeholder="12345" maxlength="6">
+            <button class="btn btn-primary" id="confirm-code-btn">Подтвердить код</button>
+        </div>
+
+        <div id="password-block" style="display:none;" class="mt-1">
+            <input type="password" id="password" placeholder="Пароль 2FA Telegram">
+            <button class="btn btn-primary" id="confirm-password-btn">Подтвердить пароль</button>
+        </div>
+
+        <div id="qr-block" class="mt-2" style="display:none;">
+            <div id="qr-image"></div>
+            <p id="qr-status" class="text-muted mt-1">Ожидание сканирования…</p>
+            <div id="qr-password-wrap" style="display:none;">
+                <input type="password" id="qr-password" placeholder="Пароль 2FA Telegram">
+                <button class="btn btn-primary" id="qr-password-btn">Подтвердить пароль</button>
+            </div>
+        </div>
+
+        <div id="tg-msg" class="mt-1"></div>
+    </section>
+
+    <section class="card" id="step-2">
+        <div class="flex mb-1" style="justify-content: space-between;">
+            <h2>Шаг 2. Подключение MAX</h2>
+            <span id="badge-2" class="status-badge status-draft">ожидает</span>
+        </div>
+
+        <input type="text" id="max-token" placeholder="Токен бота MAX">
+        <div class="flex flex-wrap">
+            <button class="btn btn-primary" id="max-connect-btn">Подключить бота</button>
+            <button class="btn btn-secondary" id="skip-max-btn">Пропустить</button>
+        </div>
+        <div id="max-msg" class="mt-1"></div>
+    </section>
+
+    <section class="card" id="step-3">
+        <div class="flex mb-1" style="justify-content: space-between;">
+            <h2>Шаг 3. Выбор каналов и запуск</h2>
+            <span id="badge-3" class="status-badge status-draft">ожидает</span>
+        </div>
+
+        <div class="grid-2">
+            <div class="card" style="margin:0;">
+                <h2 style="font-size:1.05rem;">Telegram канал</h2>
+                <button class="btn btn-secondary mb-1" id="load-channels-btn">Загрузить каналы</button>
+                <div id="channels-list"></div>
+            </div>
+
+            <div class="card" style="margin:0;">
+                <h2 style="font-size:1.05rem;">MAX цель</h2>
+                <div class="flex flex-wrap mb-1">
+                    <button class="btn btn-secondary" id="sync-targets-btn">Синхронизировать</button>
+                    <button class="btn btn-secondary" id="load-targets-btn">Показать список</button>
+                </div>
+                <div id="targets-list"></div>
+            </div>
+        </div>
+
+        <div class="mt-2 flex flex-wrap">
+            <button class="btn btn-accent" id="create-migration-btn">Создать миграцию</button>
+            <button class="btn btn-secondary" id="skip-to-cabinet-btn">Пропустить и в кабинет</button>
+        </div>
+        <div id="setup-msg" class="mt-1"></div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    const root = document.getElementById('setup-root');
+    const flags = JSON.parse(root.dataset.flags || '{}');
+
+    const badge1 = document.getElementById('badge-1');
+    const badge2 = document.getElementById('badge-2');
+    const badge3 = document.getElementById('badge-3');
+
+    const step1 = document.getElementById('step-1');
+    const step2 = document.getElementById('step-2');
+    const step3 = document.getElementById('step-3');
+
+    const phoneInput = document.getElementById('phone');
+    const codeInput = document.getElementById('code');
+    const passInput = document.getElementById('password');
+    const qrPassInput = document.getElementById('qr-password');
+
+    const tgMsg = document.getElementById('tg-msg');
+    const maxMsg = document.getElementById('max-msg');
+    const setupMsg = document.getElementById('setup-msg');
+
+    let normalizedPhone = '';
+    let selectedChannel = null;
+    let selectedTarget = null;
+    let qrTimer = null;
+
+    function setBadge(el, text, klass) {
+        el.className = 'status-badge ' + klass;
+        el.textContent = text;
+    }
+
+    function lockStep(stepEl, locked) {
+        stepEl.style.opacity = locked ? '0.65' : '1';
+        stepEl.style.pointerEvents = locked ? 'none' : 'auto';
+    }
+
+    function showMessage(el, text, ok) {
+        el.innerHTML = '<div class="card" style="border-left:3px solid ' + (ok ? 'var(--success)' : 'var(--error)') + '; margin:0;">' + text + '</div>';
+    }
+
+    async function parseJson(resp) {
+        try { return await resp.json(); } catch { return {}; }
+    }
+
+    function initState() {
+        if (flags.authed || flags.tg_connected) {
+            setBadge(badge1, 'выполнено', 'status-done');
+            lockStep(step1, true);
+            lockStep(step2, false);
+        } else {
+            setBadge(badge1, 'в процессе', 'status-importing');
+            lockStep(step2, true);
+        }
+
+        if (flags.max_connected) {
+            setBadge(badge2, 'выполнено', 'status-done');
+            lockStep(step2, true);
+            lockStep(step3, false);
+        } else if (flags.authed || flags.tg_connected) {
+            setBadge(badge2, 'в процессе', 'status-importing');
+            lockStep(step3, true);
+        } else {
+            setBadge(badge2, 'ожидает', 'status-draft');
+            lockStep(step3, true);
+        }
+
+        setBadge(badge3, 'ожидает', 'status-draft');
+    }
+
+    async function sendCode() {
+        tgMsg.innerHTML = '';
+        const resp = await fetch('/api/tg/send_code', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: phoneInput.value || '' })
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(tgMsg, 'Ошибка: ' + (data.detail || 'не удалось отправить код'), false);
+            return;
+        }
+        normalizedPhone = data.phone_normalized || phoneInput.value || '';
+        document.getElementById('code-block').style.display = 'block';
+        showMessage(tgMsg, (data.delivery_hint || 'Код отправлен') + (data.delivery_timeout_sec ? (' Повторно можно через ~' + data.delivery_timeout_sec + ' сек.') : ''), true);
+    }
+
+    async function confirmCode() {
+        const resp = await fetch('/api/tg/confirm_code', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: normalizedPhone, code: codeInput.value || '' })
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(tgMsg, 'Ошибка: ' + (data.detail || 'код не принят'), false);
+            return;
+        }
+        if (data.needs_password) {
+            document.getElementById('password-block').style.display = 'block';
+            showMessage(tgMsg, 'Требуется пароль 2FA.', true);
+            return;
+        }
+        if (data.authed) {
+            setBadge(badge1, 'выполнено', 'status-done');
+            lockStep(step1, true);
+            lockStep(step2, false);
+            setBadge(badge2, 'в процессе', 'status-importing');
+            showMessage(tgMsg, 'Telegram подключен.', true);
+        }
+    }
+
+    async function confirmPassword() {
+        const resp = await fetch('/api/tg/confirm_password', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: normalizedPhone, password: passInput.value || '' })
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(tgMsg, 'Ошибка: ' + (data.detail || 'пароль не принят'), false);
+            return;
+        }
+        if (data.authed) {
+            setBadge(badge1, 'выполнено', 'status-done');
+            lockStep(step1, true);
+            lockStep(step2, false);
+            setBadge(badge2, 'в процессе', 'status-importing');
+            showMessage(tgMsg, 'Telegram подключен.', true);
+        }
+    }
+
+    async function startQr() {
+        const qrBlock = document.getElementById('qr-block');
+        const qrImage = document.getElementById('qr-image');
+        const qrStatus = document.getElementById('qr-status');
+        const resp = await fetch('/api/tg/qr_start', {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(tgMsg, 'Ошибка QR: ' + (data.detail || 'не удалось стартовать'), false);
+            return;
+        }
+        qrBlock.style.display = 'block';
+        document.getElementById('qr-password-wrap').style.display = 'none';
+        qrImage.innerHTML = '<img alt="QR" style="border-radius:8px; border:1px solid var(--border);" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(data.qr_url) + '">';
+        qrStatus.textContent = 'Ожидание сканирования…';
+        if (qrTimer) clearInterval(qrTimer);
+        qrTimer = setInterval(pollQrStatus, 2000);
+    }
+
+    async function pollQrStatus() {
+        const qrStatus = document.getElementById('qr-status');
+        const resp = await fetch('/api/tg/qr_status', { credentials: 'same-origin' });
+        const data = await parseJson(resp);
+        if (data.status === 'pending') return;
+        if (data.status === 'needs_password') {
+            qrStatus.textContent = 'Нужен пароль 2FA Telegram.';
+            document.getElementById('qr-password-wrap').style.display = 'block';
+            if (qrTimer) clearInterval(qrTimer);
+            return;
+        }
+        if (data.status === 'done' || data.authed) {
+            if (qrTimer) clearInterval(qrTimer);
+            setBadge(badge1, 'выполнено', 'status-done');
+            lockStep(step1, true);
+            lockStep(step2, false);
+            setBadge(badge2, 'в процессе', 'status-importing');
+            showMessage(tgMsg, 'Telegram подключен через QR.', true);
+            return;
+        }
+        if (data.status === 'error') {
+            if (qrTimer) clearInterval(qrTimer);
+            showMessage(tgMsg, 'Ошибка QR: ' + (data.message || 'неизвестная ошибка'), false);
+            return;
+        }
+    }
+
+    async function confirmQrPassword() {
+        const resp = await fetch('/api/tg/qr_password', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: qrPassInput.value || '' })
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(tgMsg, 'Ошибка: ' + (data.detail || 'пароль не принят'), false);
+            return;
+        }
+        if (data.authed || data.ok) {
+            setBadge(badge1, 'выполнено', 'status-done');
+            lockStep(step1, true);
+            lockStep(step2, false);
+            setBadge(badge2, 'в процессе', 'status-importing');
+            showMessage(tgMsg, 'Telegram подключен.', true);
+        }
+    }
+
+    async function connectMax() {
+        const token = document.getElementById('max-token').value || '';
+        const resp = await fetch('/api/max/connect', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bot_token: token })
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(maxMsg, 'Ошибка MAX: ' + (data.detail || 'токен невалиден'), false);
+            return;
+        }
+        showMessage(maxMsg, 'MAX подключён: <strong>' + (data.bot_name || 'bot') + '</strong>', true);
+        setBadge(badge2, 'выполнено', 'status-done');
+        lockStep(step2, true);
+        lockStep(step3, false);
+        setBadge(badge3, 'в процессе', 'status-importing');
+    }
+
+    async function syncTargets() {
+        const resp = await fetch('/api/max/sync_targets', {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            showMessage(setupMsg, 'Ошибка синхронизации MAX: ' + (data.detail || 'ошибка'), false);
+            return;
+        }
+        showMessage(setupMsg, 'MAX цели синхронизированы. Новых чатов: ' + (data.found || 0), true);
+    }
+
+    async function loadChannels() {
+        const list = document.getElementById('channels-list');
+        const resp = await fetch('/api/tg/channels', { credentials: 'same-origin' });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            list.innerHTML = '<p class="text-muted">Ошибка: ' + (data.detail || 'не удалось загрузить каналы') + '</p>';
+            return;
+        }
+        if (!Array.isArray(data) || data.length === 0) {
+            list.innerHTML = '<p class="text-muted">Каналы не найдены.</p>';
+            return;
+        }
+        list.innerHTML = data.map(ch => (
+            '<label class="card" style="display:block; margin:0 0 0.5rem 0; cursor:pointer;">' +
+            '<input type="radio" name="tg-channel" value="' + ch.peer_id + '" data-title="' + (ch.title || '') + '" style="width:auto; margin-right:0.5rem;">' +
+            '<strong>' + (ch.title || '') + '</strong>' +
+            (ch.username ? ('<br><span class="text-muted">@' + ch.username + '</span>') : '') +
+            '</label>'
+        )).join('');
+        list.querySelectorAll('input[name="tg-channel"]').forEach(el => {
+            el.addEventListener('change', () => {
+                selectedChannel = { peer_id: el.value, title: el.dataset.title || '' };
+            });
+        });
+    }
+
+    async function loadTargets() {
+        const list = document.getElementById('targets-list');
+        const resp = await fetch('/api/max/targets', { credentials: 'same-origin' });
+        const data = await parseJson(resp);
+        if (!resp.ok) {
+            list.innerHTML = '<p class="text-muted">Ошибка: ' + (data.detail || 'не удалось загрузить цели') + '</p>';
+            return;
+        }
+        if (!Array.isArray(data) || data.length === 0) {
+            list.innerHTML = '<p class="text-muted">MAX цели не найдены.</p>';
+            return;
+        }
+        list.innerHTML = data.map(t => (
+            '<label class="card" style="display:block; margin:0 0 0.5rem 0; cursor:pointer;">' +
+            '<input type="radio" name="max-target" value="' + t.chat_id + '" style="width:auto; margin-right:0.5rem;">' +
+            '<strong>' + (t.title || '') + '</strong>' +
+            '<br><span class="text-muted">ID: ' + t.chat_id + '</span>' +
+            '</label>'
+        )).join('');
+        list.querySelectorAll('input[name="max-target"]').forEach(el => {
+            el.addEventListener('change', () => {
+                selectedTarget = parseInt(el.value, 10);
+            });
+        });
+    }
+
+    async function createMigration() {
+        if (!selectedChannel) {
+            showMessage(setupMsg, 'Сначала выберите Telegram канал.', false);
+            return;
+        }
+
+        const createResp = await fetch('/api/migrations', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tg_peer_id: selectedChannel.peer_id,
+                tg_title: selectedChannel.title
+            })
+        });
+        const createData = await parseJson(createResp);
+        if (!createResp.ok) {
+            showMessage(setupMsg, 'Ошибка создания миграции: ' + (createData.detail || 'ошибка'), false);
+            return;
+        }
+
+        const migrationId = createData.migration_id;
+        if (selectedTarget) {
+            const targetResp = await fetch('/api/migrations/' + migrationId + '/set_target', {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ max_chat_id: selectedTarget })
+            });
+            const targetData = await parseJson(targetResp);
+            if (!targetResp.ok) {
+                showMessage(setupMsg, 'Миграция создана, но цель не установлена: ' + (targetData.detail || 'ошибка'), false);
+                window.location.href = '/migration?mid=' + migrationId;
+                return;
+            }
+        }
+
+        setBadge(badge3, 'выполнено', 'status-done');
+        showMessage(setupMsg, 'Миграция создана. Переходим к деталям…', true);
+        setTimeout(() => { window.location.href = '/migration?mid=' + migrationId; }, 500);
+    }
+
+    document.getElementById('send-code-btn').addEventListener('click', sendCode);
+    document.getElementById('confirm-code-btn').addEventListener('click', confirmCode);
+    document.getElementById('confirm-password-btn').addEventListener('click', confirmPassword);
+    document.getElementById('start-qr-btn').addEventListener('click', startQr);
+    document.getElementById('qr-password-btn').addEventListener('click', confirmQrPassword);
+
+    document.getElementById('max-connect-btn').addEventListener('click', connectMax);
+    document.getElementById('skip-max-btn').addEventListener('click', () => {
+        setBadge(badge2, 'пропущено', 'status-imported');
+        lockStep(step2, true);
+        lockStep(step3, false);
+        setBadge(badge3, 'в процессе', 'status-importing');
+        showMessage(maxMsg, 'Шаг MAX пропущен. Можно подключить позже в setup.', true);
+    });
+
+    document.getElementById('load-channels-btn').addEventListener('click', loadChannels);
+    document.getElementById('sync-targets-btn').addEventListener('click', syncTargets);
+    document.getElementById('load-targets-btn').addEventListener('click', loadTargets);
+    document.getElementById('create-migration-btn').addEventListener('click', createMigration);
+    document.getElementById('skip-to-cabinet-btn').addEventListener('click', () => {
+        window.location.href = '/cabinet';
+    });
+
+    initState();
+})();
+</script>
+{% endblock %}

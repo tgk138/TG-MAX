@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tgmax
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      target: api
+    env_file: .env
+    volumes:
+      - media:/data/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-import:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    volumes:
+      - media:/data/media
+    command: >
+      sh -c "celery -A app.celery_app:celery worker
+      --loglevel=info
+      --queues=import
+      --concurrency=${IMPORT_WORKER_CONCURRENCY:-4}
+      --hostname=import@%h"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-publish:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    volumes:
+      - media:/data/media
+    command: >
+      sh -c "celery -A app.celery_app:celery worker
+      --loglevel=info
+      --queues=publish
+      --concurrency=${PUBLISH_WORKER_CONCURRENCY:-2}
+      --hostname=publish@%h"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      target: worker
+    env_file: .env
+    command: >
+      sh -c "celery -A app.celery_app:celery beat --loglevel=info"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  media:

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% set active = "support" %}
+
+{% block title %}Поддержка — TG→MAX{% endblock %}
+{% block meta_description %}Поддержка и помощь по сервису TG→MAX.{% endblock %}
+
+{% block content %}
+<h1>Поддержка</h1>
+<div class="card">
+    <h2>Частые вопросы</h2>
+    <ul style="list-style: none; padding: 0;">
+        <li class="mb-2"><strong>Код из Telegram не приходит</strong><br>
+            <span class="text-muted">Telegram отправляет код только в приложение (не по SMS). Откройте Telegram на телефоне и проверьте уведомления или раздел «Устройства». Либо используйте <a href="/setup">вход по QR-коду</a> на странице setup.</span></li>
+        <li class="mb-2"><strong>Как получить токен бота MAX?</strong><br>
+            <span class="text-muted">Создайте бота в платформе MAX и скопируйте токен в настройках бота. Вставьте его в шаге 2 на странице setup.</span></li>
+        <li class="mb-2"><strong>Можно ли перенести несколько каналов?</strong><br>
+            <span class="text-muted">Да. Для каждого канала создаётся отдельная миграция: выберите канал в шаге 3 setup, при необходимости укажите цель MAX и запустите новую миграцию.</span></li>
+    </ul>
+    <h2 class="mt-2">Связаться с нами</h2>
+    <p class="text-muted">По техническим вопросам и запросам на удаление данных напишите на указанный в описании проекта контакт или откройте issue в репозитории проекта.</p>
+</div>
+<p><a href="/" class="btn btn-secondary">← На главную</a></p>
+{% endblock %}

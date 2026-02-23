@@ -1,0 +1,479 @@
+{
+  "p90_threshold": 26.0,
+  "length_performance": [
+    {
+      "len_bin": "0-15",
+      "posts": 1274,
+      "avg_reactions": 5.05,
+      "median_reactions": 0.0,
+      "success_rate": 0.054945054945054944,
+      "success_rate_pct": 5.49
+    },
+    {
+      "len_bin": "16-40",
+      "posts": 473,
+      "avg_reactions": 12.58,
+      "median_reactions": 8.0,
+      "success_rate": 0.10782241014799154,
+      "success_rate_pct": 10.78
+    },
+    {
+      "len_bin": "41-80",
+      "posts": 297,
+      "avg_reactions": 15.91,
+      "median_reactions": 11.0,
+      "success_rate": 0.16835016835016836,
+      "success_rate_pct": 16.84
+    },
+    {
+      "len_bin": "81-200",
+      "posts": 300,
+      "avg_reactions": 15.19,
+      "median_reactions": 11.0,
+      "success_rate": 0.15333333333333332,
+      "success_rate_pct": 15.33
+    },
+    {
+      "len_bin": "200+",
+      "posts": 86,
+      "avg_reactions": 30.3,
+      "median_reactions": 24.0,
+      "success_rate": 0.47674418604651164,
+      "success_rate_pct": 47.67
+    }
+  ],
+  "hour_performance_min30": [
+    {
+      "hour": 23,
+      "posts": 92,
+      "avg_reactions": 12.51,
+      "success_rate": 0.17391304347826086,
+      "success_rate_pct": 17.39
+    },
+    {
+      "hour": 13,
+      "posts": 142,
+      "avg_reactions": 12.01,
+      "success_rate": 0.1267605633802817,
+      "success_rate_pct": 12.68
+    },
+    {
+      "hour": 8,
+      "posts": 31,
+      "avg_reactions": 11.48,
+      "success_rate": 0.12903225806451613,
+      "success_rate_pct": 12.9
+    },
+    {
+      "hour": 17,
+      "posts": 162,
+      "avg_reactions": 11.37,
+      "success_rate": 0.11728395061728394,
+      "success_rate_pct": 11.73
+    },
+    {
+      "hour": 20,
+      "posts": 194,
+      "avg_reactions": 10.8,
+      "success_rate": 0.12886597938144329,
+      "success_rate_pct": 12.89
+    },
+    {
+      "hour": 15,
+      "posts": 228,
+      "avg_reactions": 10.59,
+      "success_rate": 0.11403508771929824,
+      "success_rate_pct": 11.4
+    },
+    {
+      "hour": 10,
+      "posts": 66,
+      "avg_reactions": 10.44,
+      "success_rate": 0.13636363636363635,
+      "success_rate_pct": 13.64
+    },
+    {
+      "hour": 14,
+      "posts": 190,
+      "avg_reactions": 10.27,
+      "success_rate": 0.10526315789473684,
+      "success_rate_pct": 10.53
+    },
+    {
+      "hour": 16,
+      "posts": 224,
+      "avg_reactions": 10.03,
+      "success_rate": 0.09375,
+      "success_rate_pct": 9.38
+    },
+    {
+      "hour": 11,
+      "posts": 103,
+      "avg_reactions": 9.82,
+      "success_rate": 0.10679611650485436,
+      "success_rate_pct": 10.68
+    },
+    {
+      "hour": 12,
+      "posts": 111,
+      "avg_reactions": 9.79,
+      "success_rate": 0.10810810810810811,
+      "success_rate_pct": 10.81
+    },
+    {
+      "hour": 0,
+      "posts": 38,
+      "avg_reactions": 9.68,
+      "success_rate": 0.05263157894736842,
+      "success_rate_pct": 5.26
+    },
+    {
+      "hour": 19,
+      "posts": 152,
+      "avg_reactions": 9.27,
+      "success_rate": 0.13157894736842105,
+      "success_rate_pct": 13.16
+    },
+    {
+      "hour": 21,
+      "posts": 225,
+      "avg_reactions": 9.04,
+      "success_rate": 0.06666666666666667,
+      "success_rate_pct": 6.67
+    },
+    {
+      "hour": 22,
+      "posts": 209,
+      "avg_reactions": 8.25,
+      "success_rate": 0.09090909090909091,
+      "success_rate_pct": 9.09
+    },
+    {
+      "hour": 18,
+      "posts": 178,
+      "avg_reactions": 7.79,
+      "success_rate": 0.07865168539325842,
+      "success_rate_pct": 7.87
+    },
+    {
+      "hour": 9,
+      "posts": 40,
+      "avg_reactions": 5.85,
+      "success_rate": 0.05,
+      "success_rate_pct": 5.0
+    }
+  ],
+  "weekday_recent_12m": [
+    {
+      "weekday": 0,
+      "posts": 142,
+      "avg_reactions": 12.2,
+      "success_rate": 0.1267605633802817,
+      "success_rate_pct": 12.68
+    },
+    {
+      "weekday": 1,
+      "posts": 158,
+      "avg_reactions": 13.53,
+      "success_rate": 0.13924050632911392,
+      "success_rate_pct": 13.92
+    },
+    {
+      "weekday": 2,
+      "posts": 147,
+      "avg_reactions": 12.27,
+      "success_rate": 0.14285714285714285,
+      "success_rate_pct": 14.29
+    },
+    {
+      "weekday": 3,
+      "posts": 159,
+      "avg_reactions": 14.17,
+      "success_rate": 0.18867924528301888,
+      "success_rate_pct": 18.87
+    },
+    {
+      "weekday": 4,
+      "posts": 111,
+      "avg_reactions": 13.7,
+      "success_rate": 0.2072072072072072,
+      "success_rate_pct": 20.72
+    },
+    {
+      "weekday": 5,
+      "posts": 112,
+      "avg_reactions": 12.86,
+      "success_rate": 0.13392857142857142,
+      "success_rate_pct": 13.39
+    },
+    {
+      "weekday": 6,
+      "posts": 110,
+      "avg_reactions": 11.26,
+      "success_rate": 0.18181818181818182,
+      "success_rate_pct": 18.18
+    }
+  ],
+  "style_markers": {
+    "question_share_pct": 20.49,
+    "exclaim_share_pct": 6.38,
+    "emoji_share_pct": 35.64,
+    "link_share_pct": 8.85,
+    "success_question_share_pct": 42.25,
+    "success_exclaim_share_pct": 11.63,
+    "success_emoji_share_pct": 62.4,
+    "success_link_share_pct": 10.85
+  },
+  "voice_markers_counts": {
+    "я": 898,
+    "мы": 336,
+    "ты_тебе": 186,
+    "вы_вам": 723,
+    "успех_я": 331,
+    "успех_мы": 59,
+    "успех_ты_тебе": 84,
+    "успех_вы_вам": 131
+  },
+  "success_word_lifts": [
+    [
+      "огонек",
+      9,
+      11,
+      3.519
+    ],
+    [
+      "марафон",
+      9,
+      11,
+      3.519
+    ],
+    [
+      "стала",
+      13,
+      16,
+      3.494
+    ],
+    [
+      "ставьте",
+      10,
+      13,
+      3.308
+    ],
+    [
+      "часть",
+      15,
+      20,
+      3.226
+    ],
+    [
+      "границы",
+      8,
+      11,
+      3.128
+    ],
+    [
+      "ставка",
+      14,
+      21,
+      2.867
+    ],
+    [
+      "ключи",
+      15,
+      23,
+      2.805
+    ],
+    [
+      "таблицу",
+      8,
+      13,
+      2.647
+    ],
+    [
+      "человека",
+      15,
+      25,
+      2.58
+    ],
+    [
+      "карго",
+      15,
+      25,
+      2.58
+    ],
+    [
+      "пост",
+      22,
+      38,
+      2.49
+    ],
+    [
+      "считаю",
+      12,
+      21,
+      2.458
+    ],
+    [
+      "запуск",
+      8,
+      14,
+      2.458
+    ],
+    [
+      "spreadsheets",
+      9,
+      16,
+      2.419
+    ],
+    [
+      "edit",
+      9,
+      16,
+      2.419
+    ],
+    [
+      "отношения",
+      14,
+      25,
+      2.408
+    ],
+    [
+      "момент",
+      11,
+      21,
+      2.253
+    ],
+    [
+      "маркетплейсы",
+      12,
+      23,
+      2.244
+    ],
+    [
+      "ошибка",
+      12,
+      23,
+      2.244
+    ],
+    [
+      "полностью",
+      10,
+      20,
+      2.15
+    ],
+    [
+      "блог",
+      11,
+      22,
+      2.15
+    ],
+    [
+      "сами",
+      15,
+      30,
+      2.15
+    ],
+    [
+      "другу",
+      12,
+      24,
+      2.15
+    ],
+    [
+      "конкуренция",
+      8,
+      16,
+      2.15
+    ],
+    [
+      "жизни",
+      23,
+      47,
+      2.105
+    ],
+    [
+      "жизнь",
+      22,
+      45,
+      2.103
+    ],
+    [
+      "была",
+      28,
+      58,
+      2.076
+    ],
+    [
+      "нужен",
+      13,
+      27,
+      2.071
+    ],
+    [
+      "собой",
+      9,
+      19,
+      2.037
+    ],
+    [
+      "делают",
+      9,
+      19,
+      2.037
+    ],
+    [
+      "начала",
+      22,
+      47,
+      2.013
+    ],
+    [
+      "актуально",
+      12,
+      26,
+      1.985
+    ],
+    [
+      "посмотреть",
+      11,
+      24,
+      1.971
+    ],
+    [
+      "поделиться",
+      11,
+      24,
+      1.971
+    ],
+    [
+      "чего",
+      14,
+      31,
+      1.942
+    ],
+    [
+      "своими",
+      8,
+      18,
+      1.911
+    ],
+    [
+      "поняла",
+      11,
+      25,
+      1.892
+    ],
+    [
+      "спасибо",
+      11,
+      25,
+      1.892
+    ],
+    [
+      "дальше",
+      20,
+      46,
+      1.87
+    ]
+  ]
+}
