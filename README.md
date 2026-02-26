@@ -65,6 +65,15 @@ cd src && celery -A app.celery_app beat -l info
 
 Сервис будет доступен по адресу http://127.0.0.1:8000 .
 
+### Тесты
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+Запуск из корня репозитория; путь `src` для импорта `app` задаётся в `pyproject.toml` (pytest.ini_options.pythonpath).
+
 ### Запуск через Docker
 
 ```bash

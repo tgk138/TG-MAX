@@ -42,10 +42,12 @@ class Settings(BaseSettings):
     IMPORT_STALE_TTL_MINUTES: int = 60
     IMPORT_STALE_CHECK_SECONDS: int = 120
 
-    # Worker
+    # Worker (concurrency overridden in docker-compose via env)
     WORKER_CONCURRENCY: int = 2
+    IMPORT_WORKER_CONCURRENCY: int = 4
+    PUBLISH_WORKER_CONCURRENCY: int = 2
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()
