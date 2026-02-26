@@ -204,11 +204,8 @@
         <div>
             <label for="max-target-select" class="text-muted" style="font-size:.85rem;">Канал MAX для публикации</label>
             <select id="max-target-select">
-                <option value="">Выберите цель MAX...</option>
+                <option value="">Загрузка целей MAX...</option>
             </select>
-            <button class="btn btn-ghost" style="font-size:.8rem; padding:.3rem .6rem; margin-top:.25rem;" onclick="syncAndReloadTargets(this)">
-                <span class="btn-text">Обновить список MAX</span>
-            </button>
         </div>
         <div style="display:flex; align-items:flex-end; padding-bottom:.65rem;">
             <div class="text-muted">
@@ -627,8 +624,10 @@ function renderData(d) {
     document.getElementById('selected-count-2').textContent = String(d.selected_posts_count || 0);
 
     document.getElementById('btn-import').style.display = d.status === 'draft' ? '' : 'none';
-    document.getElementById('btn-confirm-publish').style.display = d.status === 'imported' ? '' : 'none';
-    document.getElementById('btn-retry').style.display = (d.status === 'failed' || d.status === 'done') ? '' : 'none';
+    document.getElementById('btn-confirm-publish').style.display =
+        (d.status === 'imported' || d.status === 'done' || d.status === 'failed') ? '' : 'none';
+    document.getElementById('btn-retry').style.display =
+        (d.status === 'failed' || d.status === 'done') && d.failed_units > 0 ? '' : 'none';
 
     const publishBtn = document.getElementById('btn-confirm-publish');
     if (publishBtn) {
@@ -686,29 +685,23 @@ window.confirmAndStartPublish = async function() {
     } catch(e) { showToast(e.message, 'error'); }
 };
 
-window.syncAndReloadTargets = async function(btn) {
-    setLoading(btn, true);
-    try {
-        await apiFetch('/api/max/sync_targets', { method: 'POST' });
-        showToast('MAX цели обновлены', 'success');
-        await loadTargets();
-    } catch(e) {}
-    finally { setLoading(btn, false); }
-};
-
 async function loadTargets() {
-    const select = document.getElementById('max-target-select');
+    const sel = document.getElementById('max-target-select');
     try {
-        const data = await apiFetch('/api/max/targets');
-        select.innerHTML = '<option value="">Выберите цель MAX...</option>';
+        let data = await apiFetch('/api/max/targets');
+        if (!data || data.length === 0) {
+            try { await apiFetch('/api/max/sync_targets', { method: 'POST' }); } catch(e) {}
+            data = await apiFetch('/api/max/targets');
+        }
+        sel.innerHTML = '<option value="">Выберите цель MAX...</option>';
         data.forEach(t => {
             const opt = document.createElement('option');
             opt.value = String(t.chat_id);
             opt.textContent = `${t.title} (ID: ${t.chat_id})`;
             if (migrationState && migrationState.max_target_chat_id === t.chat_id) opt.selected = true;
-            select.appendChild(opt);
+            sel.appendChild(opt);
         });
-    } catch(e) {}
+    } catch(e) { sel.innerHTML = '<option value="">Ошибка загрузки</option>'; }
 }
 
 async function poll() {

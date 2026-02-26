@@ -24,8 +24,8 @@ TRANSITIONS: dict[MigrationStatus, list[MigrationStatus]] = {
     MigrationStatus.importing: [MigrationStatus.imported, MigrationStatus.failed],
     MigrationStatus.imported: [MigrationStatus.publishing],
     MigrationStatus.publishing: [MigrationStatus.done, MigrationStatus.failed],
-    MigrationStatus.failed: [],  # terminal (retry resets publish_units, not migration status)
-    MigrationStatus.done: [],  # terminal
+    MigrationStatus.failed: [MigrationStatus.imported, MigrationStatus.publishing],
+    MigrationStatus.done: [MigrationStatus.imported],
 }
 
 

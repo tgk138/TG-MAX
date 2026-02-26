@@ -451,8 +451,10 @@ async def prepare_publish(
 ):
     """Phase-2: download full-res media for selected posts."""
     migration = await _get_user_migration(db, migration_id, user.id)
-    if migration.status != MigrationStatus.imported:
-        raise HTTPException(409, "Prepare is available only for imported migrations.")
+    if migration.status not in (MigrationStatus.imported, MigrationStatus.done, MigrationStatus.failed):
+        raise HTTPException(409, "Prepare is available only for imported/done/failed migrations.")
+    if migration.status in (MigrationStatus.done, MigrationStatus.failed):
+        await transition(db, migration_id, MigrationStatus.imported)
     if migration.preparing_media:
         return {"ok": True, "status": "already_running"}
 
