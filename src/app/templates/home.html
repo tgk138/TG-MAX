@@ -5,21 +5,21 @@
 {% block meta_description %}Перенесите Telegram-канал в MAX за один поток: авторизация, импорт, публикация и контроль статуса.{% endblock %}
 
 {% block content %}
-<section class="card" style="position: relative; overflow: hidden; min-height: 320px; border: none;">
-    <div id="hero-bg" style="position:absolute; inset:0; z-index:0; background: linear-gradient(135deg, #eff4ff 0%, #ffffff 45%, #fff0e9 100%);"></div>
-    <div style="position:relative; z-index:2; max-width: 640px;">
-        <p style="font-size:0.82rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--primary); margin-bottom:0.8rem;">
+<section class="card" style="position:relative; overflow:hidden; min-height:320px; border:none;">
+    <div id="hero-bg" style="position:absolute; inset:0; z-index:0; background:linear-gradient(135deg, var(--surface-2) 0%, var(--surface) 45%, var(--accent-light) 100%);"></div>
+    <div style="position:relative; z-index:2; max-width:640px;">
+        <p style="font-size:.82rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--primary); margin-bottom:.8rem;">
             Сервис миграции контента
         </p>
-        <h1 style="font-size:2.3rem; line-height:1.15; margin-bottom:0.9rem;">
+        <h1 style="font-size:2.3rem; line-height:1.15; margin-bottom:.9rem;">
             Из Telegram в MAX без ручной рутины
         </h1>
         <p class="text-muted" style="font-size:1.08rem; line-height:1.65; margin-bottom:1.25rem;">
             Подключите Telegram, выберите канал и цель в MAX, запустите перенос. Порядок постов и медиа сохраняется, прогресс виден в кабинете.
         </p>
         <div class="flex flex-wrap">
-            <a href="/setup" class="btn btn-accent">Начать бесплатно</a>
-            <a href="/support" class="btn btn-secondary">Как это работает</a>
+            <a href="/setup" class="btn btn-accent"><span class="btn-text">Начать бесплатно</span></a>
+            <a href="/support" class="btn btn-secondary"><span class="btn-text">Как это работает</span></a>
         </div>
     </div>
 </section>
@@ -27,15 +27,15 @@
 <section class="grid-2">
     <article class="card">
         <h2>Один setup вместо трёх страниц</h2>
-        <p class="text-muted">Авторизация Telegram, подключение MAX и выбор каналов собраны в едином мастере `/setup`.</p>
+        <p class="text-muted">Авторизация Telegram, подключение MAX и выбор каналов собраны в едином мастере.</p>
     </article>
     <article class="card">
         <h2>Контент без потери структуры</h2>
         <p class="text-muted">Сервис сохраняет порядок публикаций и корректно переносит медиа-пакеты.</p>
     </article>
     <article class="card">
-        <h2>Прозрачный статус</h2>
-        <p class="text-muted">Импорт и публикация идут в фоне, а в кабинете доступны статусы и лог событий.</p>
+        <h2>Автопостинг в реальном времени</h2>
+        <p class="text-muted">Настройте связку TG→MAX и новые посты будут автоматически публиковаться в MAX.</p>
     </article>
     <article class="card">
         <h2>Поддержка retry</h2>
@@ -46,110 +46,70 @@
 
 {% block extra_scripts %}
 <script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.166.1/build/three.module.js"
-  }
-}
+{ "imports": { "three": "https://unpkg.com/three@0.166.1/build/three.module.js" } }
 </script>
 <script type="module">
 import * as THREE from 'three';
-
 const holder = document.getElementById('hero-bg');
-if (!holder) {
-    throw new Error('hero holder not found');
-}
-
+if (!holder) throw new Error('hero holder not found');
 if (window.matchMedia('(max-width: 768px)').matches) {
-    holder.style.background = 'linear-gradient(145deg, #eaf1ff 0%, #ffffff 48%, #ffeae1 100%)';
+    // Static gradient on mobile
 } else {
     const setup = () => {
-        const w = holder.clientWidth;
-        const h = holder.clientHeight;
+        const w = holder.clientWidth, h = holder.clientHeight;
         if (!w || !h) return;
-
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(55, w/h, 0.1, 1000);
         camera.position.z = 8;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
         renderer.setSize(w, h);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
         holder.appendChild(renderer.domElement);
-
         const count = 170;
-        const particles = new Float32Array(count * 3);
-        for (let i = 0; i < count; i += 1) {
-            particles[i * 3] = (Math.random() - 0.5) * 12;
-            particles[i * 3 + 1] = (Math.random() - 0.5) * 6;
-            particles[i * 3 + 2] = (Math.random() - 0.5) * 2;
+        const particles = new Float32Array(count*3);
+        for (let i=0; i<count; i++) {
+            particles[i*3] = (Math.random()-0.5)*12;
+            particles[i*3+1] = (Math.random()-0.5)*6;
+            particles[i*3+2] = (Math.random()-0.5)*2;
         }
-
-        const particleGeometry = new THREE.BufferGeometry();
-        particleGeometry.setAttribute('position', new THREE.BufferAttribute(particles, 3));
-        const particleMaterial = new THREE.PointsMaterial({
-            color: 0x1747d1,
-            size: 0.06,
-            transparent: true,
-            opacity: 0.75
-        });
-        const points = new THREE.Points(particleGeometry, particleMaterial);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(particles,3));
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const mat = new THREE.PointsMaterial({ color: isDark ? 0x4f8cff : 0x1747d1, size:0.06, transparent:true, opacity:0.75 });
+        const points = new THREE.Points(geo, mat);
         scene.add(points);
-
-        const iconGeometry = new THREE.SphereGeometry(0.25, 20, 20);
-        const tgIcon = new THREE.Mesh(iconGeometry, new THREE.MeshBasicMaterial({ color: 0x2aabee }));
-        const maxIcon = new THREE.Mesh(iconGeometry, new THREE.MeshBasicMaterial({ color: 0xff5a36 }));
-        tgIcon.position.set(-2.4, 0.45, 0);
-        maxIcon.position.set(2.4, -0.45, 0);
+        const iconGeo = new THREE.SphereGeometry(0.25,20,20);
+        const tgIcon = new THREE.Mesh(iconGeo, new THREE.MeshBasicMaterial({color:0x2aabee}));
+        const maxIcon = new THREE.Mesh(iconGeo, new THREE.MeshBasicMaterial({color:0xff5a36}));
+        tgIcon.position.set(-2.4,0.45,0);
+        maxIcon.position.set(2.4,-0.45,0);
         scene.add(tgIcon);
         scene.add(maxIcon);
-
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x8aa7ff, transparent: true, opacity: 0.35 });
-        const lineGeo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(-2.2, 0.35, 0),
-            new THREE.Vector3(2.2, -0.35, 0)
-        ]);
-        const line = new THREE.Line(lineGeo, lineMaterial);
-        scene.add(line);
-
+        const lineMat = new THREE.LineBasicMaterial({color: isDark ? 0x4f6fff : 0x8aa7ff, transparent:true, opacity:0.35});
+        const lineGeo2 = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-2.2,0.35,0), new THREE.Vector3(2.2,-0.35,0)]);
+        scene.add(new THREE.Line(lineGeo2, lineMat));
         let rafId = 0;
         const animate = (t) => {
             rafId = requestAnimationFrame(animate);
-            const tick = t * 0.001;
-            points.rotation.z = tick * 0.03;
-            points.rotation.y = tick * 0.02;
-
-            tgIcon.position.y = Math.sin(tick * 1.7) * 0.22;
-            maxIcon.position.y = Math.cos(tick * 1.5) * 0.22;
-
+            const tick = t*0.001;
+            points.rotation.z = tick*0.03;
+            points.rotation.y = tick*0.02;
+            tgIcon.position.y = Math.sin(tick*1.7)*0.22;
+            maxIcon.position.y = Math.cos(tick*1.5)*0.22;
             renderer.render(scene, camera);
         };
         animate(0);
-
         const resize = () => {
-            const nw = holder.clientWidth;
-            const nh = holder.clientHeight;
+            const nw = holder.clientWidth, nh = holder.clientHeight;
             if (!nw || !nh) return;
-            camera.aspect = nw / nh;
+            camera.aspect = nw/nh;
             camera.updateProjectionMatrix();
             renderer.setSize(nw, nh);
         };
         window.addEventListener('resize', resize);
-        window.addEventListener('beforeunload', () => {
-            cancelAnimationFrame(rafId);
-            window.removeEventListener('resize', resize);
-            renderer.dispose();
-            particleGeometry.dispose();
-            particleMaterial.dispose();
-            iconGeometry.dispose();
-        });
     };
-
-    if ('requestIdleCallback' in window) {
-        window.requestIdleCallback(setup, { timeout: 1000 });
-    } else {
-        setTimeout(setup, 300);
-    }
+    if ('requestIdleCallback' in window) window.requestIdleCallback(setup, {timeout:1000});
+    else setTimeout(setup, 300);
 }
 </script>
 {% endblock %}

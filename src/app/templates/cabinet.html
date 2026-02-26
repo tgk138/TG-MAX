@@ -3,86 +3,132 @@
 
 {% block title %}Кабинет — TG→MAX{% endblock %}
 
+{% block extra_head %}
+<style>
+    .stat-card {
+        text-align: center; padding: 1rem;
+        background: var(--surface-3); border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+    }
+    .stat-card .stat-num { font-size: 1.8rem; font-weight: 800; color: var(--primary); }
+    .stat-card .stat-label { font-size: .82rem; color: var(--muted); margin-top: .25rem; }
+    .migration-card {
+        display: block; text-decoration: none; color: inherit;
+        border: 1px solid var(--border); border-radius: var(--radius-sm);
+        padding: 1rem; margin-bottom: .65rem;
+        transition: all var(--transition);
+        background: var(--surface);
+    }
+    .migration-card:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+    .empty-state {
+        text-align: center; padding: 3rem 1.5rem;
+        color: var(--muted);
+    }
+    .empty-state .empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: .5; }
+    .empty-state p { margin-bottom: 1rem; font-size: 1.05rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Личный кабинет</h1>
+
+<!-- Stats -->
+{% if migrations %}
+<div class="grid-3 mb-2">
+    <div class="stat-card">
+        <div class="stat-num">{{ migrations | length }}</div>
+        <div class="stat-label">Миграций</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-num">{{ migrations | selectattr('status', 'equalto', 'done') | list | length if migrations else 0 }}</div>
+        <div class="stat-label">Завершено</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-num">{{ migrations | rejectattr('status', 'equalto', 'done') | rejectattr('status', 'equalto', 'failed') | list | length if migrations else 0 }}</div>
+        <div class="stat-label">В процессе</div>
+    </div>
+</div>
+{% endif %}
 
 <section class="grid-2">
     <article class="card">
         <h2>Профиль Telegram</h2>
         {% if tg_connected and profile %}
-            <div style="display:flex; gap:0.9rem; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; gap:.9rem; align-items:center; flex-wrap:wrap;">
                 {% if avatar_data_url %}
                 <img src="{{ avatar_data_url }}" alt="Аватар Telegram"
-                     style="width:84px; height:84px; border-radius:50%; object-fit:cover; border:2px solid #cfe0ff;">
+                     style="width:72px; height:72px; border-radius:50%; object-fit:cover; border:2px solid var(--border);">
                 {% else %}
-                <div style="width:84px; height:84px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:2rem; color:var(--primary); font-weight:700;">
+                <div style="width:72px; height:72px; border-radius:50%; background:var(--primary-light); display:flex; align-items:center; justify-content:center; font-size:1.8rem; color:var(--primary); font-weight:700;">
                     {{ profile.full_name[:1] }}
                 </div>
                 {% endif %}
                 <div>
                     <div><strong>{{ profile.full_name }}</strong></div>
-                    <div class="text-muted">ID: {{ profile.id }}</div>
-                    <div class="text-muted">Username: {% if profile.username %}@{{ profile.username }}{% else %}не указан{% endif %}</div>
-                    <div class="text-muted">Телефон: {% if profile.phone %}+{{ profile.phone }}{% else %}не указан{% endif %}</div>
+                    <div class="text-muted" style="font-size:.9rem;">ID: {{ profile.id }}</div>
+                    {% if profile.username %}<div class="text-muted" style="font-size:.9rem;">@{{ profile.username }}</div>{% endif %}
                 </div>
             </div>
         {% else %}
             <p class="text-muted mb-1">Telegram ещё не подключен.</p>
-            <a href="/setup" class="btn btn-primary">Перейти в setup</a>
+            <a href="/setup" class="btn btn-primary"><span class="btn-text">Перейти в setup</span></a>
         {% endif %}
     </article>
 
     <article class="card">
-        <h2>Статус подключений</h2>
-        <div class="mb-1">
-            Telegram:
+        <h2>Подключения</h2>
+        <div class="mb-1 flex">
+            <span>Telegram:</span>
             {% if tg_connected %}
                 <span class="status-badge status-done">подключен</span>
             {% else %}
                 <span class="status-badge status-failed">не подключен</span>
             {% endif %}
         </div>
-        <div class="mb-2">
-            MAX:
+        <div class="mb-2 flex">
+            <span>MAX:</span>
             {% if max_connected %}
                 <span class="status-badge status-done">подключен{% if max_bot_name %}: {{ max_bot_name }}{% endif %}</span>
             {% else %}
                 <span class="status-badge status-failed">не подключен</span>
             {% endif %}
         </div>
-        <a href="/setup" class="btn btn-secondary">Открыть setup</a>
+        <a href="/setup" class="btn btn-ghost"><span class="btn-text">Открыть setup</span></a>
     </article>
 </section>
 
 <section class="card">
-    <div class="flex mb-2" style="justify-content: space-between; align-items:center;">
+    <div class="flex flex-between mb-2">
         <h2 style="margin:0;">Миграции</h2>
-        <a href="/setup" class="btn btn-accent">Новая миграция</a>
+        <a href="/setup" class="btn btn-accent"><span class="btn-text">Новая миграция</span></a>
     </div>
 
     {% if migrations %}
-        <div style="display:grid; gap:0.55rem;">
-            {% for migration in migrations %}
-            <a href="/migration?mid={{ migration.id }}" class="card" style="text-decoration:none; color:inherit; margin:0; box-shadow:none;">
-                <div class="flex" style="justify-content:space-between; align-items:center; gap:0.7rem;">
-                    <div>
-                        <div><strong>{{ migration.tg_channel_title }}</strong></div>
-                        <div class="text-muted">
-                            {% if migration.max_target_chat_id %}
-                                MAX chat: {{ migration.max_target_chat_id }}
-                            {% else %}
-                                MAX цель не выбрана
-                            {% endif %}
-                        </div>
-                        <div class="text-muted">{{ migration.created_at.strftime('%Y-%m-%d %H:%M') if migration.created_at else '' }}</div>
+        {% for migration in migrations %}
+        <a href="/migration?mid={{ migration.id }}" class="migration-card">
+            <div class="flex flex-between" style="gap:.7rem;">
+                <div>
+                    <div style="font-weight:700;">{{ migration.tg_channel_title }}</div>
+                    <div class="text-muted" style="font-size:.85rem;">
+                        {% if migration.max_target_chat_id %}
+                            MAX: {{ migration.max_target_chat_id }}
+                        {% else %}
+                            MAX цель не выбрана
+                        {% endif %}
+                        · {{ migration.created_at.strftime('%d.%m.%Y %H:%M') if migration.created_at else '' }}
                     </div>
-                    <span class="status-badge status-{{ migration.status.value }}">{{ migration.status.value }}</span>
                 </div>
-            </a>
-            {% endfor %}
-        </div>
+                <span class="status-badge status-{{ migration.status.value }}">{{ migration.status.value }}</span>
+            </div>
+        </a>
+        {% endfor %}
     {% else %}
-        <p class="text-muted">Пока нет миграций. Создайте первую через setup.</p>
+        <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <p>Пока нет миграций</p>
+            <p class="text-muted" style="font-size:.9rem;">Создайте первую миграцию через Setup, чтобы перенести канал из Telegram в MAX.</p>
+            <a href="/setup" class="btn btn-accent"><span class="btn-text">Создать первую миграцию</span></a>
+        </div>
     {% endif %}
 </section>
 {% endblock %}

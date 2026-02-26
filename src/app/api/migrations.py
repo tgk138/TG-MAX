@@ -523,6 +523,30 @@ async def retry_failed(
     return {"ok": True, "retried": retried}
 
 
+class EditPostRequest(BaseModel):
+    text: str
+
+
+@router.patch("/{migration_id}/posts/{post_id}/edit")
+async def edit_post(
+    migration_id: uuid.UUID,
+    post_id: uuid.UUID,
+    body: EditPostRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Edit post text before publishing."""
+    await _get_user_migration(db, migration_id, user.id)
+
+    post = await db.get(TgPost, post_id)
+    if not post or post.migration_id != migration_id:
+        raise HTTPException(404, "Post not found.")
+
+    post.text = body.text
+    await db.commit()
+    return {"ok": True}
+
+
 @router.delete("/{migration_id}")
 async def delete_migration(
     migration_id: uuid.UUID,

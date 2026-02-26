@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
+from app.api.autopost import router as autopost_router
 from app.api.max import router as max_router
 from app.api.migrations import account_router, router as migrations_router
 from app.api.pages import router as pages_router
@@ -18,6 +19,7 @@ app.include_router(max_router)
 app.include_router(migrations_router)
 app.include_router(account_router)
 app.include_router(auth_router)
+app.include_router(autopost_router)
 
 # UI routes
 app.include_router(pages_router)

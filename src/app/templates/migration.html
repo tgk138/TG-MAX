@@ -3,87 +3,211 @@
 
 {% block title %}Миграция{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* ── Telegram-style post ── */
+    .tg-post {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 0;
+        margin-bottom: .75rem; overflow: hidden;
+        transition: all var(--transition); cursor: pointer;
+    }
+    .tg-post:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+    .tg-post-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: .6rem .85rem; background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
+    }
+    .tg-post-meta { font-size: .8rem; color: var(--muted); display: flex; gap: .75rem; align-items: center; }
+    .tg-post-body { padding: .85rem; word-break: break-word; line-height: 1.6; }
+    .tg-post-media {
+        display: flex; gap: 4px; flex-wrap: wrap; padding: 0 .85rem .65rem;
+    }
+    .tg-post-media img {
+        width: 80px; height: 80px; object-fit: cover;
+        border-radius: 8px; border: 1px solid var(--border);
+        transition: transform var(--transition);
+    }
+    .tg-post-media img:hover { transform: scale(1.05); }
+    .tg-post-footer {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: .5rem .85rem; border-top: 1px solid var(--border);
+        font-size: .8rem; color: var(--muted);
+    }
+    .tg-post-check {
+        display: flex; align-items: center; gap: .35rem; cursor: pointer;
+    }
+    .tg-post-check input { width: auto; margin: 0; accent-color: var(--primary); }
+
+    /* ── Post edit modal ── */
+    .post-editor-overlay {
+        position: fixed; inset: 0; z-index: 9990;
+        background: var(--overlay);
+        display: flex; align-items: center; justify-content: center;
+        padding: 1rem; animation: fadeIn .2s ease;
+    }
+    .post-editor {
+        background: var(--surface); border-radius: var(--radius);
+        max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto;
+        box-shadow: var(--shadow); animation: scaleIn .2s ease;
+    }
+    .post-editor-header {
+        padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .post-editor-body { padding: 1.25rem; }
+    .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .editor-panel h3 { font-size: 1rem; margin-bottom: .75rem; color: var(--primary-2); }
+    .editor-panel textarea {
+        width: 100%; min-height: 200px; font-family: inherit;
+        resize: vertical; padding: .75rem; border-radius: var(--radius-sm);
+    }
+    .max-preview {
+        background: var(--surface-3); border: 1px solid var(--border);
+        border-radius: var(--radius-sm); padding: 1rem;
+        min-height: 200px; word-break: break-word; line-height: 1.6;
+    }
+    .max-preview-label {
+        display: inline-block; font-size: .75rem; font-weight: 700;
+        color: var(--accent); margin-bottom: .5rem;
+        padding: .15rem .5rem; background: var(--accent-light);
+        border-radius: 999px;
+    }
+
+    /* ── Pipeline ── */
+    .pipeline-stage {
+        margin-bottom: .5rem;
+    }
+    .pipeline-label {
+        display: flex; justify-content: space-between;
+        font-size: .9rem; margin-bottom: .2rem;
+    }
+    .pipeline-label .pct { font-weight: 700; color: var(--primary); }
+
+    /* ── Chip filters ── */
+    .filter-chips { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .5rem; }
+    .filter-chip {
+        display: inline-flex; align-items: center; gap: .3rem;
+        padding: .25rem .6rem; border-radius: 999px;
+        font-size: .8rem; font-weight: 600;
+        background: var(--primary-light); color: var(--primary);
+        border: 1px solid var(--primary); cursor: pointer;
+    }
+    .filter-chip:hover { background: var(--primary); color: #fff; }
+
+    @media (max-width: 720px) {
+        .editor-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Миграция: {{ migration.tg_channel_title if migration else "—" }}</h1>
 
 {% if migration %}
 <div class="card">
-    <div id="migration-data">Загрузка...</div>
+    <div id="migration-data">
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-text"></div>
+        <div class="skeleton skeleton-text" style="width:80%"></div>
+    </div>
 </div>
 
 <div class="card">
-    <h2>Содержимое канала</h2>
-    <div class="grid-2 mb-2">
-        <div>
-            <label for="filter-min-views">Мин. просмотров</label>
-            <input id="filter-min-views" type="number" min="0" placeholder="например, 1000">
-        </div>
-        <div>
-            <label for="filter-min-reactions">Мин. реакций</label>
-            <input id="filter-min-reactions" type="number" min="0" placeholder="например, 50">
-        </div>
-        <div>
-            <label for="filter-date-from">Дата от</label>
-            <input id="filter-date-from" type="date">
-        </div>
-        <div>
-            <label for="filter-date-to">Дата до</label>
-            <input id="filter-date-to" type="date">
+    <div class="flex flex-between mb-1">
+        <h2 style="margin:0;">Содержимое канала</h2>
+        <div class="flex" id="selection-summary">
+            <span class="text-muted">Выбрано: <strong id="selected-count">0</strong></span>
         </div>
     </div>
+
+    <details class="mb-2">
+        <summary style="cursor:pointer; color:var(--primary); font-weight:600; font-size:.9rem;">Фильтры</summary>
+        <div class="grid-2 mt-1">
+            <div>
+                <label for="filter-min-views" class="text-muted" style="font-size:.85rem;">Мин. просмотров</label>
+                <input id="filter-min-views" type="number" min="0" placeholder="например, 1000">
+            </div>
+            <div>
+                <label for="filter-min-reactions" class="text-muted" style="font-size:.85rem;">Мин. реакций</label>
+                <input id="filter-min-reactions" type="number" min="0" placeholder="например, 50">
+            </div>
+            <div>
+                <label for="filter-date-from" class="text-muted" style="font-size:.85rem;">Дата от</label>
+                <input id="filter-date-from" type="date">
+            </div>
+            <div>
+                <label for="filter-date-to" class="text-muted" style="font-size:.85rem;">Дата до</label>
+                <input id="filter-date-to" type="date">
+            </div>
+        </div>
+        <div class="flex flex-wrap mt-1">
+            <label style="display:inline-flex; align-items:center; gap:.4rem; font-size:.9rem;">
+                <input id="filter-selected-only" type="checkbox" style="width:auto; margin:0;"> Только выбранные
+            </label>
+            <button class="btn btn-primary" type="button" onclick="applyFilters()" style="padding:.4rem .8rem; font-size:.85rem;">Применить</button>
+            <button class="btn btn-ghost" type="button" onclick="resetFilters()" style="padding:.4rem .8rem; font-size:.85rem;">Сбросить</button>
+        </div>
+        <div class="filter-chips" id="filter-chips"></div>
+    </details>
+
     <div class="flex flex-wrap mb-2">
-        <label style="display:inline-flex; align-items:center; gap:0.4rem;">
-            <input id="filter-selected-only" type="checkbox" style="width:auto; margin:0;"> Только выбранные
-        </label>
-        <button class="btn btn-secondary" type="button" onclick="applyFilters()">Применить фильтры</button>
-        <button class="btn btn-primary" type="button" onclick="resetFilters()">Сбросить</button>
-        <button class="btn btn-success" type="button" onclick="selectFiltered(true)">Выбрать отфильтрованные</button>
-        <button class="btn btn-danger" type="button" onclick="selectFiltered(false)">Снять с отфильтрованных</button>
+        <button class="btn btn-success" type="button" onclick="selectFiltered(true)" style="font-size:.85rem; padding:.4rem .8rem;">
+            <span class="btn-text">Выбрать все</span>
+        </button>
+        <button class="btn btn-ghost" type="button" onclick="selectFiltered(false)" style="font-size:.85rem; padding:.4rem .8rem;">
+            <span class="btn-text">Снять выбор</span>
+        </button>
     </div>
-    <div id="channel-content" style="color: var(--muted);">Загрузка постов...</div>
+
+    <div id="channel-content">
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+        <div class="skeleton skeleton-card"></div>
+    </div>
 </div>
 
 <div class="card">
     <h2>Действия</h2>
     <div class="grid-2 mb-2">
         <div>
-            <label for="max-target-select">Канал MAX для публикации</label>
+            <label for="max-target-select" class="text-muted" style="font-size:.85rem;">Канал MAX для публикации</label>
             <select id="max-target-select">
                 <option value="">Выберите цель MAX...</option>
             </select>
         </div>
-        <div>
-            <div class="text-muted" style="margin-top:1.9rem;">
-                Выбрано постов: <strong id="selected-count">0</strong>
+        <div style="display:flex; align-items:flex-end; padding-bottom:.65rem;">
+            <div class="text-muted">
+                Выбрано постов: <strong id="selected-count-2">0</strong>
             </div>
         </div>
     </div>
     <div class="flex flex-wrap" id="actions">
         <button class="btn btn-primary" id="btn-import" style="display:none"
                 hx-post="/api/migrations/{{ migration.id }}/start_import"
-                hx-target="#action-result"
-                hx-swap="innerHTML">
-            Начать импорт
+                hx-target="#action-result" hx-swap="innerHTML">
+            <span class="btn-text">Начать импорт</span>
         </button>
 
         <button class="btn btn-success" id="btn-confirm-publish" style="display:none" type="button" onclick="confirmAndStartPublish()">
-            Подтвердить и запустить
+            <span class="btn-text">Подтвердить и запустить</span>
         </button>
 
-        <button class="btn btn-secondary" id="btn-retry" style="display:none"
+        <button class="btn btn-ghost" id="btn-retry" style="display:none"
                 hx-post="/api/migrations/{{ migration.id }}/retry_failed"
-                hx-target="#action-result"
-                hx-swap="innerHTML">
-            Повторить неудачные
+                hx-target="#action-result" hx-swap="innerHTML">
+            <span class="btn-text">Повторить неудачные</span>
         </button>
 
-        <button class="btn btn-danger"
-                onclick="if(confirm('Удалить миграцию и все данные?')) { fetch('/api/migrations/{{ migration.id }}', {method:'DELETE'}).then(()=>location.href='/setup'); }">
-            Удалить
+        <button class="btn btn-danger" onclick="confirmAction('Удалить миграцию?','Все данные и медиа будут удалены безвозвратно.',()=>{fetch('/api/migrations/{{ migration.id }}',{method:'DELETE'}).then(()=>location.href='/cabinet');},'Удалить')" style="font-size:.85rem;">
+            <span class="btn-text">Удалить</span>
         </button>
     </div>
     <div id="action-result" class="mt-1"></div>
 </div>
+
+<!-- Post editor modal (hidden) -->
+<div id="post-editor-container"></div>
 
 <script>
 const MID = "{{ migration.id }}";
@@ -92,51 +216,33 @@ let autoStartPublish = false;
 let publishStarted = false;
 let pollTimer = null;
 let pollInFlight = false;
-const filterState = {
-    min_views: null,
-    min_reactions: null,
-    date_from: null,
-    date_to: null,
-    selected_only: false,
-};
+let allPosts = [];
+const filterState = { min_views: null, min_reactions: null, date_from: null, date_to: null, selected_only: false };
 let migrationState = null;
 
 function escapeHtml(text) {
-    return (text || '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    return (text || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
 }
 
 function renderTelegramMarkdown(text) {
-    let content = (text || '').replaceAll('\r\n', '\n');
+    let content = (text || '').replaceAll('\r\n','\n');
     if (!content.trim()) return '';
-
-    // Escape first, then selectively allow markdown tags.
     content = escapeHtml(content);
-
     const blocks = [];
-    content = content.replace(/```([\s\S]*?)```/g, (_, code) => {
-        const token = `@@CODE_BLOCK_${blocks.length}@@`;
-        blocks.push(`<pre style="margin:0.5rem 0; padding:0.65rem; border:1px solid var(--border); border-radius:8px; overflow:auto;"><code>${code}</code></pre>`);
+    content = content.replace(/```([\s\S]*?)```/g, (_,code) => {
+        const token = `@@CB${blocks.length}@@`;
+        blocks.push(`<pre style="margin:.5rem 0; padding:.65rem; border:1px solid var(--border); border-radius:8px; overflow:auto; background:var(--surface-3);"><code>${code}</code></pre>`);
         return token;
     });
-
-    content = content.replace(/`([^`\n]+)`/g, '<code style="padding:0.1rem 0.35rem; border:1px solid var(--border); border-radius:6px;">$1</code>');
-    content = content.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    content = content.replace(/`([^`\n]+)`/g, '<code style="padding:.1rem .35rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2);">$1</code>');
+    content = content.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">$1</a>');
     content = content.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     content = content.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
     content = content.replace(/~~([^~\n]+)~~/g, '<s>$1</s>');
-    content = content.replace(/(^|[^\*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    content = content.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
     content = content.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
     content = content.replace(/\n/g, '<br>');
-
-    blocks.forEach((html, idx) => {
-        content = content.replace(`@@CODE_BLOCK_${idx}@@`, html);
-    });
-
+    blocks.forEach((html,idx) => { content = content.replace(`@@CB${idx}@@`, html); });
     return content;
 }
 
@@ -144,216 +250,305 @@ function fmtDate(iso) {
     if (!iso) return '—';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString('ru-RU');
+    return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
 function stagePercent(stage) {
-    const total = Number(stage?.total || 0);
-    const done = Number(stage?.done || 0);
+    const total = Number(stage?.total || 0), done = Number(stage?.done || 0);
     if (total <= 0) return 0;
-    return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+    return Math.max(0, Math.min(100, Math.round((done/total)*100)));
 }
 
-function renderStageRow(label, stage) {
-    const done = Number(stage?.done || 0);
-    const total = Number(stage?.total || 0);
+function renderPipeline(label, stage) {
+    const done = Number(stage?.done || 0), total = Number(stage?.total || 0);
     const pct = stagePercent(stage);
-    return `
-        <div style="margin-bottom:0.45rem;">
-            <div class="flex" style="justify-content:space-between; margin-bottom:0.15rem;">
-                <span>${label}</span>
-                <span style="color:var(--muted);">${done}/${total}</span>
-            </div>
-            <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
-        </div>
-    `;
+    return `<div class="pipeline-stage">
+        <div class="pipeline-label"><span>${label}</span><span>${done}/${total} <span class="pct">${pct}%</span></span></div>
+        <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
+    </div>`;
 }
 
-function renderMediaPreview(post) {
-    const items = post.preview_media || [];
-    if (!items.length) return '';
-    let html = '<div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-top:0.55rem;">';
-    for (const media of items.slice(0, 4)) {
-        const label = media.media_type || 'media';
-        html += `<a href="${media.preview_url}" target="_blank" rel="noopener noreferrer" title="${label}">
-            <img src="${media.preview_url}" alt="${label}" style="width:88px; height:88px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">
-        </a>`;
-    }
-    html += '</div>';
-    return html;
-}
-
-function isTerminalStatus(status) {
-    return status === 'done' || status === 'failed';
-}
-
+function isTerminalStatus(s) { return s === 'done' || s === 'failed'; }
 function getPollDelayMs() {
     if (!migrationState) return 3000;
     if (migrationState.preparing_media) return 3000;
-    if (isTerminalStatus(migrationState.status)) {
-        // After completion fully stop background polling; user actions still call poll().
-        return 0;
-    }
+    if (isTerminalStatus(migrationState.status)) return 0;
     return 3000;
 }
-
 function scheduleNextPoll() {
-    if (pollTimer) {
-        clearTimeout(pollTimer);
-        pollTimer = null;
-    }
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     const delay = getPollDelayMs();
-    if (delay > 0) {
-        pollTimer = setTimeout(() => {
-            poll().catch(() => {});
-        }, delay);
-    }
+    if (delay > 0) pollTimer = setTimeout(() => poll().catch(()=>{}), delay);
 }
 
-async function updatePostSelection(postId, selected) {
-    await fetch(`/api/migrations/${MID}/posts/select`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            selected,
-            post_ids: [postId],
-        }),
-    });
-}
-
+/* ── Post rendering (Telegram-style) ── */
 function renderPostsPreview(items) {
+    allPosts = items;
     const root = document.getElementById('channel-content');
     if (!items || items.length === 0) {
-        root.innerHTML = '<p>Посты пока не импортированы. Идет загрузка содержимого канала...</p>';
+        root.innerHTML = '<div class="empty-state" style="padding:2rem;"><div class="empty-icon">📝</div><p>Посты пока не импортированы</p></div>';
         return;
     }
 
-    let html = '<div style="display:flex; flex-direction:column; gap:0.75rem;">';
+    let html = '';
     for (const post of items) {
-        const mediaLabel = post.media_count > 0 ? ` · медиа: ${post.media_count}` : '';
-        const text = post.text ? renderTelegramMarkdown(post.text) : '<span style="color: var(--muted);">[без текста]</span>';
+        const text = post.text ? renderTelegramMarkdown(post.text) : '<span style="color:var(--muted);">[без текста]</span>';
         const checked = post.is_selected ? 'checked' : '';
-        const meta = `👁 ${post.views || 0} · ❤️ ${post.reactions_total || 0} · ${fmtDate(post.posted_at)}`;
-        const mediaPreview = renderMediaPreview(post);
+
+        let mediaHtml = '';
+        if (post.preview_media && post.preview_media.length > 0) {
+            mediaHtml = '<div class="tg-post-media">';
+            for (const m of post.preview_media.slice(0,4)) {
+                mediaHtml += `<a href="${m.preview_url}" target="_blank"><img src="${m.preview_url}" alt="${m.media_type || 'media'}"></a>`;
+            }
+            mediaHtml += '</div>';
+        }
+
         html += `
-            <div class="card" style="margin:0; padding:0.9rem;">
-                <div class="flex" style="justify-content:space-between; margin-bottom:0.35rem;">
-                    <div style="font-size:0.85rem; color: var(--muted);">
-                        #${post.order_index + 1} · msg ${post.message_id}${mediaLabel}
-                    </div>
-                    <label style="display:inline-flex; align-items:center; gap:0.4rem;">
-                        <input type="checkbox" style="width:auto; margin:0;" data-post-id="${post.id}" ${checked}>
-                        Выбрать
-                    </label>
+        <div class="tg-post" data-post-id="${post.id}">
+            <div class="tg-post-header">
+                <div class="tg-post-meta">
+                    <span>#${post.order_index + 1}</span>
+                    <span>msg ${post.message_id}</span>
+                    ${post.media_count > 0 ? `<span>📎 ${post.media_count}</span>` : ''}
                 </div>
-                <div style="font-size:0.8rem; color: var(--muted); margin-bottom:0.35rem;">${meta}</div>
-                <div style="word-break:break-word;">${text}</div>
-                ${mediaPreview}
+                <label class="tg-post-check" onclick="event.stopPropagation();">
+                    <input type="checkbox" data-post-id="${post.id}" ${checked}> Выбрать
+                </label>
             </div>
-        `;
+            <div class="tg-post-body" onclick="openPostEditor('${post.id}')">${text}</div>
+            ${mediaHtml}
+            <div class="tg-post-footer">
+                <div class="tg-post-meta">
+                    <span>👁 ${post.views || 0}</span>
+                    <span>❤️ ${post.reactions_total || 0}</span>
+                    <span>${fmtDate(post.posted_at)}</span>
+                </div>
+                <button class="btn btn-ghost" style="padding:.2rem .6rem; font-size:.8rem;" onclick="event.stopPropagation(); openPostEditor('${post.id}')">
+                    Открыть
+                </button>
+            </div>
+        </div>`;
     }
-    html += '</div>';
     root.innerHTML = html;
 
-    root.querySelectorAll('input[type="checkbox"][data-post-id]').forEach((el) => {
+    root.querySelectorAll('input[type="checkbox"][data-post-id]').forEach(el => {
         el.addEventListener('change', async (e) => {
             const postId = e.target.dataset.postId;
             const selected = !!e.target.checked;
             try {
-                await updatePostSelection(postId, selected);
+                await apiFetch(`/api/migrations/${MID}/posts/select`, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ selected, post_ids: [postId] }),
+                });
                 await poll();
-            } catch (err) {
-                alert('Не удалось обновить выбор поста');
-                e.target.checked = !selected;
-            }
+            } catch(err) { e.target.checked = !selected; }
         });
     });
 }
 
-async function loadSourcePreview() {
-    if (sourcePreviewLoaded) return;
-    sourcePreviewLoaded = true;
-    try {
-        const resp = await fetch(`/api/migrations/${MID}/source_preview?limit=30`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (data.items && data.items.length > 0) {
-            renderPostsPreview(data.items.map((item, idx) => ({
-                id: `source-${item.message_id}`,
-                order_index: idx,
-                message_id: item.message_id,
-                text: item.text,
-                media_count: item.has_media ? 1 : 0,
-                views: item.views || 0,
-                reactions_total: item.reactions_total || 0,
-                posted_at: item.date || null,
-                is_selected: true,
-                preview_media: [],
-            })));
+/* ── Post editor (Telegram vs MAX preview) ── */
+window.openPostEditor = function(postId) {
+    const post = allPosts.find(p => p.id === postId);
+    if (!post) return;
+
+    const container = document.getElementById('post-editor-container');
+    const originalText = post.text || '';
+
+    let mediaHtml = '';
+    if (post.preview_media && post.preview_media.length > 0) {
+        mediaHtml = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:.75rem;">';
+        for (const m of post.preview_media) {
+            mediaHtml += `<img src="${m.preview_url}" alt="${m.media_type}" style="width:100px; height:100px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">`;
         }
-    } catch (e) { /* ignore */ }
+        mediaHtml += '</div>';
+    }
+
+    container.innerHTML = `
+    <div class="post-editor-overlay" onclick="if(event.target===this)closePostEditor()">
+        <div class="post-editor">
+            <div class="post-editor-header">
+                <h2 style="margin:0; font-size:1.1rem;">Пост #${post.order_index + 1} · msg ${post.message_id}</h2>
+                <button class="btn btn-ghost" onclick="closePostEditor()" style="padding:.3rem .6rem;">✕</button>
+            </div>
+            <div class="post-editor-body">
+                <div class="editor-grid">
+                    <div class="editor-panel">
+                        <h3>Telegram (оригинал)</h3>
+                        <textarea id="editor-textarea" placeholder="Текст поста...">${escapeHtml(originalText)}</textarea>
+                        ${mediaHtml}
+                    </div>
+                    <div class="editor-panel">
+                        <h3>MAX (предпросмотр)</h3>
+                        <div class="max-preview-label">MAX</div>
+                        <div class="max-preview" id="max-preview-content">${renderTelegramMarkdown(originalText)}</div>
+                        ${mediaHtml}
+                    </div>
+                </div>
+                <div class="flex flex-wrap mt-2">
+                    <button class="btn btn-primary" onclick="savePostEdit('${postId}')"><span class="btn-text">Сохранить</span></button>
+                    <button class="btn btn-ghost" onclick="closePostEditor()"><span class="btn-text">Отмена</span></button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+
+    const textarea = document.getElementById('editor-textarea');
+    textarea.addEventListener('input', () => {
+        document.getElementById('max-preview-content').innerHTML = renderTelegramMarkdown(textarea.value);
+    });
+
+    document.addEventListener('keydown', function esc(e) {
+        if (e.key === 'Escape') { closePostEditor(); document.removeEventListener('keydown', esc); }
+    });
+};
+
+window.closePostEditor = function() {
+    const container = document.getElementById('post-editor-container');
+    const overlay = container.querySelector('.post-editor-overlay');
+    if (overlay) {
+        overlay.style.animation = 'fadeOut .2s ease forwards';
+        setTimeout(() => { container.innerHTML = ''; }, 200);
+    }
+};
+
+window.savePostEdit = async function(postId) {
+    const textarea = document.getElementById('editor-textarea');
+    const newText = textarea.value;
+    try {
+        await apiFetch(`/api/migrations/${MID}/posts/${postId}/edit`, {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ text: newText }),
+        });
+        showToast('Пост сохранён', 'success');
+        closePostEditor();
+        const post = allPosts.find(p => p.id === postId);
+        if (post) post.text = newText;
+        renderPostsPreview(allPosts);
+    } catch(e) {}
+};
+
+/* ── Filters ── */
+function readFiltersFromInputs() {
+    const mv = document.getElementById('filter-min-views').value;
+    const mr = document.getElementById('filter-min-reactions').value;
+    filterState.min_views = mv === '' ? null : parseInt(mv,10);
+    filterState.min_reactions = mr === '' ? null : parseInt(mr,10);
+    filterState.date_from = document.getElementById('filter-date-from').value || null;
+    filterState.date_to = document.getElementById('filter-date-to').value || null;
+    filterState.selected_only = !!document.getElementById('filter-selected-only').checked;
+    updateFilterChips();
 }
 
+function updateFilterChips() {
+    const chips = document.getElementById('filter-chips');
+    let html = '';
+    if (filterState.min_views !== null) html += `<span class="filter-chip" onclick="clearFilter('min_views')">👁 ≥ ${filterState.min_views} ✕</span>`;
+    if (filterState.min_reactions !== null) html += `<span class="filter-chip" onclick="clearFilter('min_reactions')">❤️ ≥ ${filterState.min_reactions} ✕</span>`;
+    if (filterState.date_from) html += `<span class="filter-chip" onclick="clearFilter('date_from')">от ${filterState.date_from} ✕</span>`;
+    if (filterState.date_to) html += `<span class="filter-chip" onclick="clearFilter('date_to')">до ${filterState.date_to} ✕</span>`;
+    if (filterState.selected_only) html += `<span class="filter-chip" onclick="clearFilter('selected_only')">Только выбранные ✕</span>`;
+    chips.innerHTML = html;
+}
+
+window.clearFilter = function(key) {
+    if (key === 'min_views') { filterState.min_views = null; document.getElementById('filter-min-views').value = ''; }
+    if (key === 'min_reactions') { filterState.min_reactions = null; document.getElementById('filter-min-reactions').value = ''; }
+    if (key === 'date_from') { filterState.date_from = null; document.getElementById('filter-date-from').value = ''; }
+    if (key === 'date_to') { filterState.date_to = null; document.getElementById('filter-date-to').value = ''; }
+    if (key === 'selected_only') { filterState.selected_only = false; document.getElementById('filter-selected-only').checked = false; }
+    updateFilterChips();
+    poll();
+};
+
+window.applyFilters = function() { readFiltersFromInputs(); poll(); };
+window.resetFilters = function() {
+    document.getElementById('filter-min-views').value = '';
+    document.getElementById('filter-min-reactions').value = '';
+    document.getElementById('filter-date-from').value = '';
+    document.getElementById('filter-date-to').value = '';
+    document.getElementById('filter-selected-only').checked = false;
+    readFiltersFromInputs();
+    poll();
+};
+
+function hasActiveFilters() {
+    return (filterState.min_views !== null) || (filterState.min_reactions !== null) ||
+           !!filterState.date_from || !!filterState.date_to || !!filterState.selected_only;
+}
+
+window.selectFiltered = async function(selected) {
+    readFiltersFromInputs();
+    try {
+        await apiFetch(`/api/migrations/${MID}/posts/select`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                selected,
+                min_views: filterState.min_views,
+                min_reactions: filterState.min_reactions,
+                date_from: filterState.date_from,
+                date_to: filterState.date_to,
+            }),
+        });
+        showToast(selected ? 'Посты выбраны' : 'Выбор снят', 'info');
+        await poll();
+    } catch(e) {}
+};
+
+/* ── Data rendering ── */
 function renderData(d) {
     migrationState = d;
-
-    const pipeline = d.pipeline || {};
-    const progressHtml = `
-        <div style="margin-bottom:0.6rem;">
-            ${renderStageRow('1) Импорт метаданных', pipeline.import)}
-            ${renderStageRow('2) Превью медиа (low-res)', pipeline.preview)}
-            ${renderStageRow('3) Отбор постов', pipeline.selection)}
-            ${renderStageRow('4) Подготовка full-res', pipeline.prepare)}
-            ${renderStageRow('5) Публикация', pipeline.publish)}
-        </div>
-    `;
-
-    let failedHtml = '';
-    if (d.failed_units > 0) {
-        failedHtml = `<div class="counter-item" style="border:1px solid var(--error);">
-            <div class="num" style="color:var(--error);">${d.failed_units}</div>
-            <div class="label">Ошибки</div>
-        </div>`;
-    }
+    const p = d.pipeline || {};
 
     let eventsHtml = '';
     if (d.events && d.events.length > 0) {
-        eventsHtml = '<h2>Лог событий</h2><div class="events-log">';
+        eventsHtml = '<details style="margin-top:.75rem;"><summary style="cursor:pointer; color:var(--primary); font-weight:600; font-size:.9rem;">Лог событий (' + d.events.length + ')</summary><div class="events-log mt-1">';
         d.events.forEach(e => {
-            const ts = e.created_at ? e.created_at.substring(0, 19) : '';
-            eventsHtml += `<div class="event-item event-${e.type}">
-                <span style="color:var(--muted);">${ts}</span> [${e.phase}] ${e.message}
-            </div>`;
+            const ts = e.created_at ? e.created_at.substring(0,19).replace('T',' ') : '';
+            eventsHtml += `<div class="event-item event-${e.type}"><span class="event-icon"></span><span style="color:var(--muted); flex-shrink:0; font-size:.8rem;">${ts}</span><span>[${e.phase}] ${e.message}</span></div>`;
         });
-        eventsHtml += '</div>';
+        eventsHtml += '</div></details>';
+    }
+
+    let failedHtml = '';
+    if (d.failed_units > 0) {
+        failedHtml = `<div class="counter-item" style="border-color:var(--error);"><div class="num" style="color:var(--error);">${d.failed_units}</div><div class="label">Ошибки</div></div>`;
     }
 
     document.getElementById('migration-data').innerHTML = `
-        <div class="flex mb-2">
-            <span class="status-badge status-${d.status}">${d.status}</span>
-            ${d.max_target_chat_id ? `<span style="color:var(--muted);">→ Chat ID: ${d.max_target_chat_id}</span>` : ''}
+        <div class="flex flex-between mb-2">
+            <div class="flex"><span class="status-badge status-${d.status}">${d.status}</span>
+            ${d.max_target_chat_id ? `<span class="text-muted">→ Chat ${d.max_target_chat_id}</span>` : ''}</div>
         </div>
-        ${progressHtml}
+        ${renderPipeline('Импорт метаданных', p.import)}
+        ${renderPipeline('Превью медиа', p.preview)}
+        ${renderPipeline('Отбор постов', p.selection)}
+        ${renderPipeline('Подготовка full-res', p.prepare)}
+        ${renderPipeline('Публикация', p.publish)}
         <div class="counters">
             <div class="counter-item"><div class="num">${d.total_posts}</div><div class="label">Всего постов</div></div>
             <div class="counter-item"><div class="num">${d.imported_posts}</div><div class="label">Импортировано</div></div>
-            <div class="counter-item"><div class="num">${d.selected_posts_count || 0}</div><div class="label">Выбрано постов</div></div>
-            <div class="counter-item"><div class="num">${d.downloaded_media}</div><div class="label">Медиа скачано</div></div>
+            <div class="counter-item"><div class="num">${d.selected_posts_count || 0}</div><div class="label">Выбрано</div></div>
+            <div class="counter-item"><div class="num">${d.downloaded_media}</div><div class="label">Медиа</div></div>
             <div class="counter-item"><div class="num">${d.published_units}</div><div class="label">Опубликовано</div></div>
             ${failedHtml}
         </div>
-        ${eventsHtml}
-    `;
-    document.getElementById('selected-count').textContent = String(d.selected_posts_count || 0);
+        ${eventsHtml}`;
 
-    // Show/hide action buttons based on status
+    document.getElementById('selected-count').textContent = String(d.selected_posts_count || 0);
+    document.getElementById('selected-count-2').textContent = String(d.selected_posts_count || 0);
+
     document.getElementById('btn-import').style.display = d.status === 'draft' ? '' : 'none';
     document.getElementById('btn-confirm-publish').style.display = d.status === 'imported' ? '' : 'none';
     document.getElementById('btn-retry').style.display = (d.status === 'failed' || d.status === 'done') ? '' : 'none';
+
     const publishBtn = document.getElementById('btn-confirm-publish');
     if (publishBtn) {
         publishBtn.disabled = !!d.preparing_media;
-        publishBtn.textContent = d.preparing_media ? 'Подготовка full-res...' : 'Подтвердить и запустить';
+        publishBtn.querySelector('.btn-text').textContent = d.preparing_media ? 'Подготовка full-res...' : 'Подтвердить и запустить';
     }
 
     if (autoStartPublish && d.status === 'imported' && !d.preparing_media) {
@@ -365,187 +560,89 @@ function renderData(d) {
     }
 }
 
-function readFiltersFromInputs() {
-    const minViews = document.getElementById('filter-min-views').value;
-    const minReactions = document.getElementById('filter-min-reactions').value;
-    filterState.min_views = minViews === '' ? null : parseInt(minViews, 10);
-    filterState.min_reactions = minReactions === '' ? null : parseInt(minReactions, 10);
-    filterState.date_from = document.getElementById('filter-date-from').value || null;
-    filterState.date_to = document.getElementById('filter-date-to').value || null;
-    filterState.selected_only = !!document.getElementById('filter-selected-only').checked;
-}
-
-function applyFilters() {
-    readFiltersFromInputs();
-    poll();
-}
-
-function resetFilters() {
-    document.getElementById('filter-min-views').value = '';
-    document.getElementById('filter-min-reactions').value = '';
-    document.getElementById('filter-date-from').value = '';
-    document.getElementById('filter-date-to').value = '';
-    document.getElementById('filter-selected-only').checked = false;
-    readFiltersFromInputs();
-    poll();
-}
-
-function hasActiveFilters() {
-    return (
-        (filterState.min_views !== null && !Number.isNaN(filterState.min_views)) ||
-        (filterState.min_reactions !== null && !Number.isNaN(filterState.min_reactions)) ||
-        !!filterState.date_from ||
-        !!filterState.date_to ||
-        !!filterState.selected_only
-    );
-}
-
-async function selectFiltered(selected) {
-    readFiltersFromInputs();
-    const body = {
-        selected,
-        min_views: filterState.min_views,
-        min_reactions: filterState.min_reactions,
-        date_from: filterState.date_from,
-        date_to: filterState.date_to,
-    };
-    const resp = await fetch(`/api/migrations/${MID}/posts/select`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        alert(data.detail || 'Не удалось обновить выбор');
-        return;
-    }
-    await poll();
-}
-
-async function ensureTargetSet() {
-    const select = document.getElementById('max-target-select');
-    const value = select.value;
-    if (!value) {
-        throw new Error('Выберите канал MAX для публикации');
-    }
-    const targetId = parseInt(value, 10);
-    const r = await fetch(`/api/migrations/${MID}/set_target`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ max_chat_id: targetId }),
-    });
-    if (!r.ok) {
-        const data = await r.json().catch(() => ({}));
-        throw new Error(data.detail || 'Не удалось сохранить цель MAX');
-    }
-}
-
 async function startPublish() {
     if (publishStarted) return;
     publishStarted = true;
     try {
-        const r = await fetch(`/api/migrations/${MID}/start_publish`, { method: 'POST' });
-        if (!r.ok) {
-            const data = await r.json().catch(() => ({}));
-            throw new Error(data.detail || 'Не удалось запустить публикацию');
-        }
-        document.getElementById('action-result').innerHTML = '<div class="card" style="margin:0;">Публикация запущена.</div>';
-    } catch (err) {
-        document.getElementById('action-result').innerHTML = `<div class="card" style="margin:0; border-left:3px solid var(--error);">${escapeHtml(err.message || String(err))}</div>`;
-    } finally {
-        publishStarted = false;
-    }
+        await apiFetch(`/api/migrations/${MID}/start_publish`, { method: 'POST' });
+        showToast('Публикация запущена!', 'success');
+    } catch(e) {}
+    finally { publishStarted = false; }
 }
 
-async function confirmAndStartPublish() {
+window.confirmAndStartPublish = async function() {
     try {
-        if (!migrationState || migrationState.status !== 'imported') {
-            throw new Error('Миграция еще не готова к публикации');
-        }
-        if ((migrationState.selected_posts_count || 0) <= 0) {
-            throw new Error('Выберите минимум один пост');
-        }
-        await ensureTargetSet();
-        if (!confirm('Публикуем выбранные посты в указанный канал MAX?')) {
-            return;
-        }
-        const prepResp = await fetch(`/api/migrations/${MID}/prepare_publish`, { method: 'POST' });
-        if (!prepResp.ok) {
-            const data = await prepResp.json().catch(() => ({}));
-            throw new Error(data.detail || 'Не удалось запустить подготовку full-res');
-        }
-        autoStartPublish = true;
-        document.getElementById('action-result').innerHTML = '<div class="card" style="margin:0;">Подготовка full-res запущена. Публикация стартует автоматически после завершения.</div>';
-        await poll();
-    } catch (err) {
-        document.getElementById('action-result').innerHTML = `<div class="card" style="margin:0; border-left:3px solid var(--error);">${escapeHtml(err.message || String(err))}</div>`;
-    }
-}
+        if (!migrationState || migrationState.status !== 'imported') throw new Error('Миграция ещё не готова');
+        if ((migrationState.selected_posts_count || 0) <= 0) throw new Error('Выберите минимум один пост');
+
+        const select = document.getElementById('max-target-select');
+        if (!select.value) throw new Error('Выберите канал MAX');
+
+        const targetId = parseInt(select.value, 10);
+        await apiFetch(`/api/migrations/${MID}/set_target`, {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ max_chat_id: targetId }),
+        });
+
+        confirmAction(
+            'Запустить публикацию?',
+            `Будет опубликовано ${migrationState.selected_posts_count} постов в выбранный канал MAX.`,
+            async () => {
+                try {
+                    await apiFetch(`/api/migrations/${MID}/prepare_publish`, { method: 'POST' });
+                    autoStartPublish = true;
+                    showToast('Подготовка запущена. Публикация стартует автоматически.', 'info');
+                    await poll();
+                } catch(e) {}
+            },
+            'Запустить'
+        );
+    } catch(e) { showToast(e.message, 'error'); }
+};
 
 async function loadTargets() {
     const select = document.getElementById('max-target-select');
     try {
-        const resp = await fetch('/api/max/targets');
-        if (!resp.ok) return;
-        const data = await resp.json();
+        const data = await apiFetch('/api/max/targets');
         select.innerHTML = '<option value="">Выберите цель MAX...</option>';
-        data.forEach((t) => {
+        data.forEach(t => {
             const opt = document.createElement('option');
             opt.value = String(t.chat_id);
             opt.textContent = `${t.title} (ID: ${t.chat_id})`;
-            if (migrationState && migrationState.max_target_chat_id === t.chat_id) {
-                opt.selected = true;
-            }
+            if (migrationState && migrationState.max_target_chat_id === t.chat_id) opt.selected = true;
             select.appendChild(opt);
         });
-    } catch (e) { /* ignore */ }
+    } catch(e) {}
 }
 
 async function poll() {
     if (pollInFlight) return;
     pollInFlight = true;
     try {
-        const resp = await fetch(`/api/migrations/${MID}`);
-        if (resp.ok) {
-            const data = await resp.json();
-            renderData(data);
-        }
-    } catch(e) { /* ignore */ }
+        const data = await apiFetch(`/api/migrations/${MID}`);
+        renderData(data);
+    } catch(e) {}
 
     try {
         const params = new URLSearchParams();
         params.set('limit', '100');
-        if (filterState.min_views !== null && !Number.isNaN(filterState.min_views)) params.set('min_views', String(filterState.min_views));
-        if (filterState.min_reactions !== null && !Number.isNaN(filterState.min_reactions)) params.set('min_reactions', String(filterState.min_reactions));
+        if (filterState.min_views !== null) params.set('min_views', String(filterState.min_views));
+        if (filterState.min_reactions !== null) params.set('min_reactions', String(filterState.min_reactions));
         if (filterState.date_from) params.set('date_from', filterState.date_from);
         if (filterState.date_to) params.set('date_to', filterState.date_to);
         if (filterState.selected_only) params.set('selected_only', 'true');
-        const previewResp = await fetch(`/api/migrations/${MID}/posts_preview?${params.toString()}`);
-        if (previewResp.ok) {
-            const previewData = await previewResp.json();
-            const items = previewData.items || [];
-            if (items.length > 0) {
-                renderPostsPreview(items);
-            } else {
-                const activeFilters = hasActiveFilters();
-                if (activeFilters) {
-                    document.getElementById('channel-content').innerHTML = '<p>По заданным фильтрам посты не найдены.</p>';
-                } else if (
-                    migrationState &&
-                    (migrationState.status === 'draft' || migrationState.status === 'importing') &&
-                    Number(migrationState.imported_posts || 0) === 0
-                ) {
-                    await loadSourcePreview();
-                } else {
-                    document.getElementById('channel-content').innerHTML = '<p>Посты пока не импортированы.</p>';
-                }
-            }
+        const previewData = await apiFetch(`/api/migrations/${MID}/posts_preview?${params.toString()}`);
+        const items = previewData.items || [];
+        if (items.length > 0) {
+            renderPostsPreview(items);
+        } else if (!hasActiveFilters() && migrationState && (migrationState.status === 'draft' || migrationState.status === 'importing') && !migrationState.imported_posts) {
+            document.getElementById('channel-content').innerHTML = '<div class="empty-state" style="padding:2rem;"><div class="empty-icon">⏳</div><p>Импорт в процессе...</p></div>';
+        } else if (hasActiveFilters()) {
+            document.getElementById('channel-content').innerHTML = '<div class="empty-state" style="padding:2rem;"><div class="empty-icon">🔍</div><p>По заданным фильтрам посты не найдены</p></div>';
         }
-    } catch (e) { /* ignore */ }
-    finally {
-        pollInFlight = false;
-        scheduleNextPoll();
-    }
+    } catch(e) {}
+    finally { pollInFlight = false; scheduleNextPoll(); }
 }
 
 loadTargets();
@@ -554,7 +651,11 @@ poll();
 
 {% else %}
 <div class="card">
-    <p>Миграция не выбрана. <a href="/setup">Откройте setup</a> для начала.</p>
+    <div class="empty-state">
+        <div class="empty-icon">📦</div>
+        <p>Миграция не выбрана</p>
+        <a href="/setup" class="btn btn-accent"><span class="btn-text">Откройте setup для начала</span></a>
+    </div>
 </div>
 {% endif %}
 {% endblock %}

@@ -1,3 +1,4 @@
+from app.models.autopost import AutopostLink, AutopostStatus
 from app.models.base import Base, async_session, engine, get_session
 from app.models.job_event import EventPhase, EventType, JobEvent
 from app.models.max_connection import MaxConnection
@@ -11,6 +12,8 @@ from app.models.user import User
 from app.models.user_session import UserSession
 
 __all__ = [
+    "AutopostLink",
+    "AutopostStatus",
     "Base",
     "async_session",
     "engine",

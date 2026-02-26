@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% set active = "autopost" %}
+
+{% block title %}Автопостинг — TG→MAX{% endblock %}
+
+{% block extra_head %}
+<style>
+    .link-card {
+        border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 1rem; margin-bottom: .75rem;
+        background: var(--surface); transition: all var(--transition);
+    }
+    .link-card:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+    .link-arrow { color: var(--accent); font-weight: 700; font-size: 1.2rem; margin: 0 .5rem; }
+    .link-stat { font-size: .85rem; color: var(--muted); margin-top: .4rem; }
+    .create-form { padding: 1.25rem; }
+    .channel-card {
+        display: flex; align-items: center; gap: .75rem;
+        padding: .75rem; margin-bottom: .5rem;
+        border: 2px solid var(--border); border-radius: var(--radius-sm);
+        cursor: pointer; transition: all var(--transition);
+        background: var(--surface);
+    }
+    .channel-card:hover { border-color: var(--primary); background: var(--primary-light); }
+    .channel-card.selected { border-color: var(--primary); background: var(--primary-light); }
+    .channel-card input[type="radio"] { width: auto; margin: 0; accent-color: var(--primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-between mb-2">
+    <h1 style="margin:0;">Автопостинг</h1>
+    <button class="btn btn-accent" onclick="toggleCreateForm()"><span class="btn-text">Новая связка</span></button>
+</div>
+
+<p class="text-muted mb-2">Настройте автоматическую пересылку новых постов из Telegram-канала в MAX. Сервис проверяет канал каждые 2 минуты и публикует новые посты.</p>
+
+<!-- Create form (hidden by default) -->
+<div class="card" id="create-form" style="display:none;">
+    <h2>Создать связку автопостинга</h2>
+
+    {% if not setup_flags.tg_connected or not setup_flags.max_connected %}
+    <div style="padding:1rem; background:var(--warn-light); border:1px solid var(--warn); border-radius:var(--radius-sm); margin-bottom:1rem;">
+        <strong style="color:var(--warn);">Требуется подключение</strong>
+        <p class="text-muted mt-1">Для создания связки нужны подключения Telegram и MAX. <a href="/setup">Перейти в setup</a></p>
+    </div>
+    {% else %}
+    <div class="grid-2">
+        <div>
+            <h2 style="font-size:1rem;">Источник (Telegram)</h2>
+            <button class="btn btn-secondary mb-1" onclick="loadAutopostChannels(this)"><span class="btn-text">Загрузить каналы</span></button>
+            <div id="ap-channels-list"></div>
+        </div>
+        <div>
+            <h2 style="font-size:1rem;">Цель (MAX)</h2>
+            <button class="btn btn-secondary mb-1" onclick="loadAutopostTargets(this)"><span class="btn-text">Загрузить цели</span></button>
+            <div id="ap-targets-list"></div>
+        </div>
+    </div>
+    <div class="mt-2">
+        <button class="btn btn-accent" onclick="createAutopostLink(this)"><span class="btn-text">Создать связку</span></button>
+        <button class="btn btn-ghost" onclick="toggleCreateForm()"><span class="btn-text">Отмена</span></button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Existing links -->
+<div id="links-container">
+    {% if links %}
+        {% for link in links %}
+        <div class="link-card" id="link-{{ link.id }}">
+            <div class="flex flex-between flex-wrap">
+                <div class="flex flex-wrap" style="align-items:center;">
+                    <strong>{{ link.tg_channel_title }}</strong>
+                    <span class="link-arrow">→</span>
+                    <strong>{{ link.max_chat_title or ('Chat ' ~ link.max_chat_id) }}</strong>
+                </div>
+                <span class="status-badge status-{{ link.status.value }}">{{ link.status.value }}</span>
+            </div>
+            <div class="link-stat">
+                Переслано: {{ link.forwarded_count }} постов
+                {% if link.error_text %}
+                    · <span class="text-error">{{ link.error_text }}</span>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap mt-1" style="gap:.4rem;">
+                {% if link.status.value == 'active' %}
+                <button class="btn btn-ghost" style="padding:.3rem .7rem; font-size:.85rem;" onclick="pauseLink('{{ link.id }}')">
+                    <span class="btn-text">Пауза</span>
+                </button>
+                {% else %}
+                <button class="btn btn-success" style="padding:.3rem .7rem; font-size:.85rem;" onclick="resumeLink('{{ link.id }}')">
+                    <span class="btn-text">Запустить</span>
+                </button>
+                {% endif %}
+                <button class="btn btn-danger" style="padding:.3rem .7rem; font-size:.85rem;"
+                        onclick="confirmAction('Удалить связку?','Автопостинг из этого канала будет остановлен.',()=>deleteLink('{{ link.id }}'),'Удалить')">
+                    <span class="btn-text">Удалить</span>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="card">
+            <div class="empty-state" style="padding:2rem;">
+                <div class="empty-icon">🔗</div>
+                <p>Нет связок автопостинга</p>
+                <p class="text-muted" style="font-size:.9rem;">Создайте связку, чтобы новые посты автоматически публиковались из Telegram в MAX.</p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let apSelectedChannel = null;
+let apSelectedTarget = null;
+
+function toggleCreateForm() {
+    const form = document.getElementById('create-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+window.loadAutopostChannels = async function(btn) {
+    setLoading(btn, true);
+    const list = document.getElementById('ap-channels-list');
+    try {
+        const data = await apiFetch('/api/tg/channels');
+        if (!Array.isArray(data) || data.length === 0) {
+            list.innerHTML = '<p class="text-muted">Каналы не найдены.</p>';
+            return;
+        }
+        list.innerHTML = data.map(ch =>
+            `<label class="channel-card">
+                <input type="radio" name="ap-tg-channel" value="${ch.peer_id}" data-title="${ch.title || ''}">
+                <div><strong>${ch.title || ''}</strong>${ch.username ? '<br><span class="text-muted">@' + ch.username + '</span>' : ''}</div>
+            </label>`
+        ).join('');
+        list.querySelectorAll('input[name="ap-tg-channel"]').forEach(el => {
+            el.addEventListener('change', () => {
+                apSelectedChannel = { peer_id: el.value, title: el.dataset.title || '' };
+                list.querySelectorAll('.channel-card').forEach(c => c.classList.remove('selected'));
+                el.closest('.channel-card').classList.add('selected');
+            });
+        });
+    } catch(e) { list.innerHTML = '<p class="text-muted">Ошибка загрузки.</p>'; }
+    finally { setLoading(btn, false); }
+};
+
+window.loadAutopostTargets = async function(btn) {
+    setLoading(btn, true);
+    const list = document.getElementById('ap-targets-list');
+    try {
+        const data = await apiFetch('/api/max/targets');
+        if (!Array.isArray(data) || data.length === 0) {
+            list.innerHTML = '<p class="text-muted">Цели не найдены.</p>';
+            return;
+        }
+        list.innerHTML = data.map(t =>
+            `<label class="channel-card">
+                <input type="radio" name="ap-max-target" value="${t.chat_id}" data-title="${t.title || ''}">
+                <div><strong>${t.title || ''}</strong><br><span class="text-muted">ID: ${t.chat_id}</span></div>
+            </label>`
+        ).join('');
+        list.querySelectorAll('input[name="ap-max-target"]').forEach(el => {
+            el.addEventListener('change', () => {
+                apSelectedTarget = { chat_id: parseInt(el.value, 10), title: el.dataset.title || '' };
+                list.querySelectorAll('.channel-card').forEach(c => c.classList.remove('selected'));
+                el.closest('.channel-card').classList.add('selected');
+            });
+        });
+    } catch(e) { list.innerHTML = '<p class="text-muted">Ошибка загрузки.</p>'; }
+    finally { setLoading(btn, false); }
+};
+
+window.createAutopostLink = async function(btn) {
+    if (!apSelectedChannel) { showToast('Выберите Telegram канал', 'warn'); return; }
+    if (!apSelectedTarget) { showToast('Выберите MAX цель', 'warn'); return; }
+    setLoading(btn, true);
+    try {
+        await apiFetch('/api/autopost', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                tg_peer_id: apSelectedChannel.peer_id,
+                tg_title: apSelectedChannel.title,
+                max_chat_id: apSelectedTarget.chat_id,
+                max_chat_title: apSelectedTarget.title,
+            })
+        });
+        showToast('Связка создана!', 'success');
+        setTimeout(() => location.reload(), 500);
+    } catch(e) {}
+    finally { setLoading(btn, false); }
+};
+
+window.pauseLink = async function(id) {
+    try {
+        await apiFetch(`/api/autopost/${id}/pause`, { method: 'PATCH' });
+        showToast('Связка приостановлена', 'info');
+        setTimeout(() => location.reload(), 300);
+    } catch(e) {}
+};
+
+window.resumeLink = async function(id) {
+    try {
+        await apiFetch(`/api/autopost/${id}/resume`, { method: 'PATCH' });
+        showToast('Связка запущена', 'success');
+        setTimeout(() => location.reload(), 300);
+    } catch(e) {}
+};
+
+window.deleteLink = async function(id) {
+    try {
+        await apiFetch(`/api/autopost/${id}`, { method: 'DELETE' });
+        showToast('Связка удалена', 'info');
+        const el = document.getElementById('link-' + id);
+        if (el) { el.style.animation = 'fadeOut .3s ease forwards'; setTimeout(() => el.remove(), 300); }
+    } catch(e) {}
+};
+</script>
+{% endblock %}

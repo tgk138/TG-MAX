@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_optional_user
 from app.models.job_event import JobEvent
 from app.models.max_connection import MaxConnection
+from app.models.autopost import AutopostLink
 from app.models.migration import Migration, MigrationStatus
 from app.models.tg_connection import TgConnection, TgConnectionStatus
 from app.models.user import User
@@ -289,5 +290,34 @@ async def migration_page(
             "current_user": user,
             "migration": migration,
             "data": data,
+        },
+    )
+
+
+@router.get("/autopost")
+async def autopost_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    if not user:
+        return _redirect_home()
+
+    flags = await _setup_flags(db, user)
+    links_result = await db.execute(
+        select(AutopostLink)
+        .where(AutopostLink.user_id == user.id)
+        .order_by(AutopostLink.created_at.desc())
+        .limit(50)
+    )
+    links = links_result.scalars().all()
+
+    return templates.TemplateResponse(
+        "autopost.html",
+        {
+            "request": request,
+            "current_user": user,
+            "setup_flags": flags,
+            "links": links,
         },
     )
