@@ -10,6 +10,7 @@ from app.models.base import Base, new_uuid
 class MediaType(str, enum.Enum):
     photo = "photo"
     video = "video"
+    video_note = "video_note"
     document = "document"
     audio = "audio"
     voice = "voice"

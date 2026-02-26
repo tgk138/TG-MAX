@@ -83,6 +83,23 @@ async def create_link(
     if not max_conn:
         raise HTTPException(400, "No MAX connection.")
 
+    # Get current latest message ID so we only forward truly NEW posts
+    from app.services import secrets as sec
+    from app.services.telegram import TelegramService
+
+    session_string = sec.decrypt(tg_conn.session_encrypted)
+    tg = TelegramService(session_string)
+    last_msg_id = 0
+    try:
+        await tg.connect()
+        entity = await tg.client.get_entity(int(body.tg_peer_id))
+        async for msg in tg.client.iter_messages(entity, limit=1):
+            last_msg_id = msg.id
+    except Exception:
+        pass
+    finally:
+        await tg.disconnect()
+
     link = AutopostLink(
         user_id=user.id,
         tg_connection_id=tg_conn.id,
@@ -91,12 +108,13 @@ async def create_link(
         tg_channel_title=body.tg_title,
         max_chat_id=body.max_chat_id,
         max_chat_title=body.max_chat_title,
+        last_tg_message_id=last_msg_id,
     )
     db.add(link)
     await db.commit()
     await db.refresh(link)
 
-    return {"id": str(link.id), "status": "active"}
+    return {"id": str(link.id), "status": "active", "last_tg_message_id": last_msg_id}
 
 
 @router.patch("/{link_id}/pause")

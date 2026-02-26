@@ -24,7 +24,7 @@
         display: flex; gap: 4px; flex-wrap: wrap; padding: 0 .85rem .65rem;
     }
     .tg-post-media img {
-        width: 80px; height: 80px; object-fit: cover;
+        width: 160px; height: 160px; object-fit: cover;
         border-radius: 8px; border: 1px solid var(--border);
         transition: transform var(--transition);
     }
@@ -175,6 +175,9 @@
             <select id="max-target-select">
                 <option value="">Выберите цель MAX...</option>
             </select>
+            <button class="btn btn-ghost" style="font-size:.8rem; padding:.3rem .6rem; margin-top:.25rem;" onclick="syncAndReloadTargets(this)">
+                <span class="btn-text">Обновить список MAX</span>
+            </button>
         </div>
         <div style="display:flex; align-items:flex-end; padding-bottom:.65rem;">
             <div class="text-muted">
@@ -298,8 +301,8 @@ function renderPostsPreview(items) {
         let mediaHtml = '';
         if (post.preview_media && post.preview_media.length > 0) {
             mediaHtml = '<div class="tg-post-media">';
-            for (const m of post.preview_media.slice(0,4)) {
-                mediaHtml += `<a href="${m.preview_url}" target="_blank"><img src="${m.preview_url}" alt="${m.media_type || 'media'}"></a>`;
+            for (const m of post.preview_media.slice(0,10)) {
+                mediaHtml += `<a href="${m.preview_url}" target="_blank"><img src="${m.preview_url}" alt="${m.media_type || 'media'}" loading="lazy"></a>`;
             }
             mediaHtml += '</div>';
         }
@@ -316,8 +319,8 @@ function renderPostsPreview(items) {
                     <input type="checkbox" data-post-id="${post.id}" ${checked}> Выбрать
                 </label>
             </div>
-            <div class="tg-post-body" onclick="openPostEditor('${post.id}')">${text}</div>
             ${mediaHtml}
+            <div class="tg-post-body" onclick="openPostEditor('${post.id}')">${text}</div>
             <div class="tg-post-footer">
                 <div class="tg-post-meta">
                     <span>👁 ${post.views || 0}</span>
@@ -601,6 +604,16 @@ window.confirmAndStartPublish = async function() {
     } catch(e) { showToast(e.message, 'error'); }
 };
 
+window.syncAndReloadTargets = async function(btn) {
+    setLoading(btn, true);
+    try {
+        await apiFetch('/api/max/sync_targets', { method: 'POST' });
+        showToast('MAX цели обновлены', 'success');
+        await loadTargets();
+    } catch(e) {}
+    finally { setLoading(btn, false); }
+};
+
 async function loadTargets() {
     const select = document.getElementById('max-target-select');
     try {
@@ -626,7 +639,7 @@ async function poll() {
 
     try {
         const params = new URLSearchParams();
-        params.set('limit', '100');
+        params.set('limit', '500');
         if (filterState.min_views !== null) params.set('min_views', String(filterState.min_views));
         if (filterState.min_reactions !== null) params.set('min_reactions', String(filterState.min_reactions));
         if (filterState.date_from) params.set('date_from', filterState.date_from);

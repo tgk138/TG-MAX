@@ -35,6 +35,8 @@ class ChannelInfo:
 
 def _media_type_from_tg(message) -> MediaType:
     """Determine MediaType from a Telethon message."""
+    if getattr(message, "video_note", None):
+        return MediaType.video_note
     if message.photo:
         return MediaType.photo
     if message.video:
@@ -385,31 +387,90 @@ class TelegramService:
         min_id: int = 0,
         limit: int = 50,
     ) -> list[dict]:
-        """Fetch posts newer than min_id for autopost forwarding."""
+        """Fetch posts newer than min_id for autopost forwarding.
+
+        Groups albums (grouped_id) into single post entries with multiple media items.
+        Distinguishes video_notes (circles) from regular videos.
+        """
         entity = await self.client.get_entity(peer_id)
-        items: list[dict] = []
+        raw_messages: list = []
         async for msg in self.client.iter_messages(entity, limit=limit, min_id=min_id):
             if msg.id <= min_id:
                 continue
-            text = normalize_tg_text(msg.text or msg.raw_text)
-            media_bytes = None
-            media_type = None
-            if msg.media:
-                try:
-                    media_bytes = await self.client.download_media(msg, bytes)
-                    media_type = _media_type_from_tg(msg)
-                except Exception:
-                    logger.warning("Failed to download media for autopost msg %d", msg.id)
-            items.append({
-                "message_id": msg.id,
-                "text": text,
-                "has_media": bool(msg.media),
-                "media_bytes": media_bytes,
-                "media_type": media_type,
-                "ext": self._guess_extension(msg) if msg.media else None,
-            })
-        items.sort(key=lambda x: x["message_id"])
+            raw_messages.append(msg)
+
+        raw_messages.sort(key=lambda m: m.id)
+
+        # Group albums
+        album_buffer: dict[int, list] = {}
+        solo_messages: list = []
+        for msg in raw_messages:
+            if msg.grouped_id:
+                album_buffer.setdefault(msg.grouped_id, []).append(msg)
+            else:
+                solo_messages.append(msg)
+
+        all_entries: list = []
+        for msg in solo_messages:
+            all_entries.append(("solo", msg))
+        for gid, msgs in sorted(album_buffer.items(), key=lambda x: x[1][0].id):
+            msgs.sort(key=lambda m: m.id)
+            all_entries.append(("album", msgs))
+        all_entries.sort(key=lambda e: e[1].id if e[0] == "solo" else e[1][0].id)
+
+        items: list[dict] = []
+        for entry_type, entry_data in all_entries:
+            if entry_type == "solo":
+                msg = entry_data
+                text = normalize_tg_text(msg.text or msg.raw_text)
+                media_list = []
+                if msg.media:
+                    media_item = await self._download_for_autopost(msg)
+                    if media_item:
+                        media_list.append(media_item)
+                items.append({
+                    "message_id": msg.id,
+                    "text": text,
+                    "media_list": media_list,
+                })
+            else:
+                msgs = entry_data
+                text = normalize_tg_text(
+                    next((m.text or m.raw_text for m in msgs if m.text or m.raw_text), None)
+                )
+                media_list = []
+                for msg in msgs:
+                    if msg.media:
+                        media_item = await self._download_for_autopost(msg)
+                        if media_item:
+                            media_list.append(media_item)
+                items.append({
+                    "message_id": msgs[-1].id,
+                    "text": text,
+                    "media_list": media_list,
+                })
+
         return items
+
+    async def _download_for_autopost(self, msg) -> dict | None:
+        """Download media bytes and determine type for autopost forwarding."""
+        try:
+            media_bytes = await self.client.download_media(msg, bytes)
+            if not media_bytes:
+                return None
+
+            is_video_note = bool(getattr(msg, "video_note", None))
+            media_type = _media_type_from_tg(msg)
+
+            return {
+                "bytes": media_bytes,
+                "media_type": media_type,
+                "is_video_note": is_video_note,
+                "ext": self._guess_extension(msg),
+            }
+        except Exception:
+            logger.warning("Failed to download media for autopost msg %d", msg.id)
+            return None
 
     async def _download_media(
         self,
@@ -459,21 +520,29 @@ class TelegramService:
         return count
 
     async def _download_preview_bytes(self, message) -> bytes | None:
-        """Try to fetch a low-quality preview. Falls back to full bytes if needed."""
-        for thumb in (0, -1):
+        """Download a reasonable-quality preview for the migration page.
+
+        Strategy: try the largest thumbnail first (-1), then full file.
+        Cap at 2MB to keep storage manageable but still look sharp.
+        """
+        max_preview_size = 2 * 1024 * 1024  # 2MB
+
+        # Try largest available thumbnail first (often good enough quality)
+        for thumb in (-1, 0):
             try:
                 data = await self.client.download_media(message, bytes, thumb=thumb)
             except Exception:
                 continue
             if isinstance(data, bytes) and data:
-                # Keep previews compact to speed up phase-1 import.
-                if len(data) <= 512_000:
+                if len(data) <= max_preview_size:
                     return data
-                return data[:512_000]
+                return data[:max_preview_size]
+
+        # Fall back to full file (truncated to cap)
         try:
             data = await self.client.download_media(message, bytes)
             if isinstance(data, bytes) and data:
-                return data[:512_000]
+                return data[:max_preview_size]
         except Exception:
             return None
         return None

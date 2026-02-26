@@ -323,7 +323,7 @@ async def get_source_preview(
 @router.get("/{migration_id}/posts_preview")
 async def get_posts_preview(
     migration_id: uuid.UUID,
-    limit: int = 50,
+    limit: int = 500,
     min_views: int | None = None,
     min_reactions: int | None = None,
     date_from: date | None = None,
@@ -334,7 +334,7 @@ async def get_posts_preview(
 ):
     """Get imported posts preview for migration page."""
     await _get_user_migration(db, migration_id, user.id)
-    safe_limit = max(1, min(limit, 200))
+    safe_limit = max(1, min(limit, 1000))
 
     query = select(TgPost).where(TgPost.migration_id == migration_id)
     if min_views is not None:

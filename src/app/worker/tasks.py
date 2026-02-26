@@ -391,20 +391,25 @@ async def _process_autopost_link(link):
         for post in new_posts:
             try:
                 text, format_ = to_max_text_payload(post["text"])
-                attachments = None
+                attachments = []
 
-                if post["media_bytes"] and post["media_type"]:
+                for media_item in post.get("media_list", []):
                     import os
                     import tempfile
 
-                    upload_type = _max_upload_type(post["media_type"])
+                    media_bytes = media_item["bytes"]
+                    is_video_note = media_item.get("is_video_note", False)
+
+                    if is_video_note:
+                        upload_type = "video"
+                    else:
+                        upload_type = _max_upload_type(media_item["media_type"])
+
                     upload = await max_client.request_upload(upload_type)
-
-                    ext = post.get("ext") or ".bin"
+                    ext = media_item.get("ext") or ".bin"
                     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                        tmp.write(post["media_bytes"])
+                        tmp.write(media_bytes)
                         tmp_path = tmp.name
-
                     try:
                         uploaded_token = await max_client.upload_file(upload.url, tmp_path)
                     finally:
@@ -412,13 +417,16 @@ async def _process_autopost_link(link):
 
                     token = uploaded_token or upload.token
                     if token:
-                        attachments = [{"type": upload_type, "payload": {"token": token}}]
+                        attachments.append({
+                            "type": upload_type,
+                            "payload": {"token": token},
+                        })
 
                 if text or attachments:
                     await max_client.send_message_with_retry(
                         chat_id=link.max_chat_id,
                         text=text,
-                        attachments=attachments,
+                        attachments=attachments if attachments else None,
                         format_=format_,
                     )
                     forwarded += 1
@@ -672,6 +680,7 @@ def _max_upload_type(media_type) -> str:
     mapping = {
         MediaType.photo: "image",
         MediaType.video: "video",
+        MediaType.video_note: "video",
         MediaType.audio: "audio",
         MediaType.voice: "audio",
         MediaType.document: "file",
