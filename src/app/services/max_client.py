@@ -223,6 +223,10 @@ class MaxClient:
         if format_:
             body["format"] = format_
 
+        logger.info(
+            "MAX send_message chat_id=%s format=%s text_preview=%s",
+            chat_id, format_, (text or '')[:80],
+        )
         return await self._request("POST", "/messages", params=params, json=body)
 
     async def send_message_with_retry(

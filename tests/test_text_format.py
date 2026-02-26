@@ -6,13 +6,11 @@ def test_normalize_tg_text_trims_and_normalizes_bullets():
     assert normalize_tg_text(src) == "- one\n- two\n- three"
 
 
-def test_to_max_text_payload_converts_tg_markdown_to_max():
+def test_to_max_text_payload_converts_to_html():
     text, format_ = to_max_text_payload("**Bold** and ~~strike~~")
-    assert "*Bold*" in text
-    assert "**" not in text
-    assert "~strike~" in text
-    assert "~~" not in text
-    assert format_ == "markdown"
+    assert "<b>Bold</b>" in text
+    assert "<s>strike</s>" in text
+    assert format_ == "html"
 
 
 def test_to_max_text_payload_plain_text():

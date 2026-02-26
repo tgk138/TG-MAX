@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_mod
 import re
 
 _BULLET_RE = re.compile(r"(?m)^\s*[•●◦]\s+")
@@ -33,50 +34,50 @@ def normalize_tg_text(text: str | None, entities=None) -> str | None:
     return cleaned
 
 
-def _tg_markdown_to_max_markdown(text: str) -> str:
-    """Convert Telegram-style markdown to MAX-style markdown.
+def _tg_markdown_to_html(text: str) -> str:
+    """Convert Telegram-style markdown to HTML for MAX API.
 
-    MAX API uses different syntax (dev.max.ru/docs-api):
-      Bold:          *text*   (Telegram uses **text**)
-      Italic:        _text_   (same)
-      Strikethrough: ~text~   (Telegram uses ~~text~~)
-      Code:          `text`   (same)
+    Confirmed via live test: MAX API only renders format='html'.
+    format='markdown' does NOT work despite documentation.
     """
     content = text
 
-    # Preserve code blocks and inline code from conversion
+    # Preserve code blocks
     blocks: list[str] = []
     def _save_block(m):
         token = f"\x00CB{len(blocks)}\x00"
-        blocks.append(m.group(0))
+        blocks.append(f"<pre><code>{html_mod.escape(m.group(1))}</code></pre>")
         return token
-    content = re.sub(r"```[\s\S]*?```", _save_block, content)
+    content = re.sub(r"```([\s\S]*?)```", _save_block, content)
 
+    # Preserve inline code
     codes: list[str] = []
     def _save_code(m):
         token = f"\x00IC{len(codes)}\x00"
-        codes.append(m.group(0))
+        codes.append(f"<code>{html_mod.escape(m.group(1))}</code>")
         return token
-    content = re.sub(r"`[^`\n]+`", _save_code, content)
+    content = re.sub(r"`([^`\n]+)`", _save_code, content)
 
-    # **bold** → *bold* (same line only, no * inside)
-    content = re.sub(r"\*\*([^*\n]+)\*\*", r"*\1*", content)
-    # __bold__ → *bold*
-    content = re.sub(r"__([^_\n]+)__", r"*\1*", content)
+    # Escape HTML entities
+    content = html_mod.escape(content)
 
-    # ~~strike~~ → ~strike~ (same line only)
-    content = re.sub(r"~~([^~\n]+)~~", r"~\1~", content)
-
-    # _italic_ stays as _italic_ (same syntax)
-    # `code` stays as `code` (same syntax)
-    # [text](url) → just keep as text (url) since MAX markdown may not support links
+    # Links [text](url) → <a href="url">text</a>
     content = re.sub(
         r"\[([^\]]+)\]\((https?://[^)\s]+)\)",
-        r"\1 (\2)",
+        r'<a href="\2">\1</a>',
         content,
     )
 
-    # Restore code blocks and inline code
+    # Bold **text** → <b>text</b> (same line only)
+    content = re.sub(r"\*\*([^*\n]+)\*\*", r"<b>\1</b>", content)
+    # Bold __text__ → <b>text</b>
+    content = re.sub(r"__([^_\n]+)__", r"<b>\1</b>", content)
+    # Strikethrough ~~text~~ → <s>text</s>
+    content = re.sub(r"~~([^~\n]+)~~", r"<s>\1</s>", content)
+    # Italic _text_ (avoid matching __ already converted)
+    content = re.sub(r"(?<!_)_([^_\n]+)_(?!_)", r"<i>\1</i>", content)
+
+    # Restore preserved tokens
     for i, block in enumerate(blocks):
         content = content.replace(f"\x00CB{i}\x00", block)
     for i, code in enumerate(codes):
@@ -88,14 +89,12 @@ def _tg_markdown_to_max_markdown(text: str) -> str:
 def to_max_text_payload(text: str | None) -> tuple[str | None, str | None]:
     """Return text and format for MAX API.
 
-    Converts Telegram markdown to MAX markdown syntax:
-      **bold** → *bold*, ~~strike~~ → ~strike~
-    Returns format='markdown' so MAX renders formatting.
+    Converts Telegram markdown to HTML. MAX API only renders format='html'
+    (confirmed: format='markdown' does NOT work despite documentation).
     """
     normalized = normalize_tg_text(text)
     if not normalized:
         return None, None
     if _MARKDOWN_HINT_RE.search(normalized):
-        return _tg_markdown_to_max_markdown(normalized), "markdown"
+        return _tg_markdown_to_html(normalized), "html"
     return normalized, None
-
