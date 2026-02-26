@@ -48,24 +48,38 @@
     }
     .post-editor {
         background: var(--surface); border-radius: var(--radius);
-        max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto;
+        max-width: 900px; width: 100%; max-height: 92vh; overflow-y: auto;
         box-shadow: var(--shadow); animation: scaleIn .2s ease;
     }
     .post-editor-header {
         padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
         display: flex; justify-content: space-between; align-items: center;
+        position: sticky; top: 0; background: var(--surface); z-index: 2;
     }
     .post-editor-body { padding: 1.25rem; }
     .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    .editor-panel h3 { font-size: 1rem; margin-bottom: .75rem; color: var(--primary-2); }
+    .editor-panel { display: flex; flex-direction: column; }
+    .editor-panel h3 { font-size: 1rem; margin-bottom: .5rem; color: var(--primary-2); }
+    .editor-media-strip {
+        display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: .75rem;
+        padding: .5rem; background: var(--surface-2); border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+    }
+    .editor-media-strip img {
+        width: 120px; height: 120px; object-fit: cover;
+        border-radius: 8px; border: 1px solid var(--border);
+    }
+    .editor-media-strip:empty { display: none; }
     .editor-panel textarea {
-        width: 100%; min-height: 200px; font-family: inherit;
+        width: 100%; min-height: 180px; font-family: inherit;
         resize: vertical; padding: .75rem; border-radius: var(--radius-sm);
+        font-size: .95rem; line-height: 1.55;
     }
     .max-preview {
         background: var(--surface-3); border: 1px solid var(--border);
         border-radius: var(--radius-sm); padding: 1rem;
-        min-height: 200px; word-break: break-word; line-height: 1.6;
+        min-height: 180px; word-break: break-word; line-height: 1.6;
+        font-size: .95rem;
     }
     .max-preview-label {
         display: inline-block; font-size: .75rem; font-weight: 700;
@@ -73,6 +87,23 @@
         padding: .15rem .5rem; background: var(--accent-light);
         border-radius: 999px;
     }
+    /* ── Formatting toolbar ── */
+    .fmt-toolbar {
+        display: flex; gap: 2px; padding: .35rem .25rem;
+        background: var(--surface-2); border: 1px solid var(--border);
+        border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+        flex-wrap: wrap;
+    }
+    .fmt-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 32px; border: none; border-radius: 6px;
+        background: transparent; cursor: pointer;
+        font-size: .9rem; font-weight: 700; color: var(--text-2);
+        transition: all var(--transition);
+    }
+    .fmt-btn:hover { background: var(--primary-light); color: var(--primary); }
+    .fmt-btn[title]::after { content: none; }
+    .fmt-toolbar + textarea { border-top-left-radius: 0; border-top-right-radius: 0; }
 
     /* ── Pipeline ── */
     .pipeline-stage {
@@ -359,13 +390,13 @@ window.openPostEditor = function(postId) {
     const container = document.getElementById('post-editor-container');
     const originalText = post.text || '';
 
-    let mediaHtml = '';
+    let mediaStripHtml = '';
     if (post.preview_media && post.preview_media.length > 0) {
-        mediaHtml = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:.75rem;">';
+        mediaStripHtml = '<div class="editor-media-strip">';
         for (const m of post.preview_media) {
-            mediaHtml += `<img src="${m.preview_url}" alt="${m.media_type}" style="width:100px; height:100px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">`;
+            mediaStripHtml += `<img src="${m.preview_url}" alt="${m.media_type || 'media'}" loading="lazy">`;
         }
-        mediaHtml += '</div>';
+        mediaStripHtml += '</div>';
     }
 
     container.innerHTML = `
@@ -379,19 +410,29 @@ window.openPostEditor = function(postId) {
                 <div class="editor-grid">
                     <div class="editor-panel">
                         <h3>Telegram (оригинал)</h3>
+                        ${mediaStripHtml}
+                        <div class="fmt-toolbar">
+                            <button class="fmt-btn" title="Жирный (Ctrl+B)" onclick="fmtWrap('**','**')"><b>B</b></button>
+                            <button class="fmt-btn" title="Курсив (Ctrl+I)" onclick="fmtWrap('_','_')"><i>I</i></button>
+                            <button class="fmt-btn" title="Зачёркнутый" onclick="fmtWrap('~~','~~')"><s>S</s></button>
+                            <button class="fmt-btn" title="Код" onclick="fmtWrap('\`','\`')" style="font-family:monospace;">&lt;/&gt;</button>
+                            <button class="fmt-btn" title="Блок кода" onclick="fmtWrap('\`\`\`\\n','\\n\`\`\`')" style="font-family:monospace; font-size:.75rem;">{ }</button>
+                            <button class="fmt-btn" title="Ссылка" onclick="fmtLink()">🔗</button>
+                            <button class="fmt-btn" title="Список" onclick="fmtList()">☰</button>
+                        </div>
                         <textarea id="editor-textarea" placeholder="Текст поста...">${escapeHtml(originalText)}</textarea>
-                        ${mediaHtml}
                     </div>
                     <div class="editor-panel">
                         <h3>MAX (предпросмотр)</h3>
+                        ${mediaStripHtml}
                         <div class="max-preview-label">MAX</div>
                         <div class="max-preview" id="max-preview-content">${renderTelegramMarkdown(originalText)}</div>
-                        ${mediaHtml}
                     </div>
                 </div>
                 <div class="flex flex-wrap mt-2">
                     <button class="btn btn-primary" onclick="savePostEdit('${postId}')"><span class="btn-text">Сохранить</span></button>
                     <button class="btn btn-ghost" onclick="closePostEditor()"><span class="btn-text">Отмена</span></button>
+                    <span class="text-muted" style="font-size:.8rem; margin-left:auto;">Markdown: **жирный** _курсив_ ~~зачёркнутый~~ \`код\`</span>
                 </div>
             </div>
         </div>
@@ -401,10 +442,51 @@ window.openPostEditor = function(postId) {
     textarea.addEventListener('input', () => {
         document.getElementById('max-preview-content').innerHTML = renderTelegramMarkdown(textarea.value);
     });
+    textarea.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'b') { e.preventDefault(); fmtWrap('**','**'); }
+            if (e.key === 'i') { e.preventDefault(); fmtWrap('_','_'); }
+        }
+    });
 
     document.addEventListener('keydown', function esc(e) {
         if (e.key === 'Escape') { closePostEditor(); document.removeEventListener('keydown', esc); }
     });
+};
+
+/* ── Formatting helpers ── */
+window.fmtWrap = function(before, after) {
+    const ta = document.getElementById('editor-textarea');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const selected = ta.value.substring(start, end);
+    const replacement = before + (selected || 'текст') + after;
+    ta.setRangeText(replacement, start, end, 'select');
+    ta.focus();
+    ta.dispatchEvent(new Event('input'));
+};
+
+window.fmtLink = function() {
+    const ta = document.getElementById('editor-textarea');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const selected = ta.value.substring(start, end) || 'текст ссылки';
+    const replacement = `[${selected}](https://)`;
+    ta.setRangeText(replacement, start, end, 'select');
+    ta.focus();
+    ta.dispatchEvent(new Event('input'));
+};
+
+window.fmtList = function() {
+    const ta = document.getElementById('editor-textarea');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const selected = ta.value.substring(start, end);
+    const lines = selected ? selected.split('\n') : ['пункт 1', 'пункт 2', 'пункт 3'];
+    const replacement = lines.map(l => '- ' + l.replace(/^[-•●◦]\s*/, '')).join('\n');
+    ta.setRangeText(replacement, start, end, 'select');
+    ta.focus();
+    ta.dispatchEvent(new Event('input'));
 };
 
 window.closePostEditor = function() {
