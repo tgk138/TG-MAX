@@ -6,10 +6,11 @@ def test_normalize_tg_text_trims_and_normalizes_bullets():
     assert normalize_tg_text(src) == "- one\n- two\n- three"
 
 
-def test_to_max_text_payload_detects_markdown():
+def test_to_max_text_payload_converts_markdown_to_html():
     text, format_ = to_max_text_payload("**Bold** and [link](https://example.com)")
-    assert text == "**Bold** and [link](https://example.com)"
-    assert format_ == "markdown"
+    assert "<b>Bold</b>" in text
+    assert '<a href="https://example.com">link</a>' in text
+    assert format_ == "html"
 
 
 def test_to_max_text_payload_plain_text():

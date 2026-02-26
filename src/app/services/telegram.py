@@ -218,11 +218,17 @@ class TelegramService:
         entity = await self.client.get_entity(peer_id)
 
         # Phase 1: fast metadata scan (no media download) to get totals
+        from telethon.tl.types import MessageService
+
         total_posts_est = 0
         total_media_est = 0
         message_buffer: list = []
 
         async for message in self.client.iter_messages(entity, limit=None):
+            if isinstance(message, MessageService):
+                continue
+            if not message.text and not message.raw_text and not message.media:
+                continue
             message_buffer.append(message)
             if message.media:
                 total_media_est += 1
@@ -392,10 +398,16 @@ class TelegramService:
         Groups albums (grouped_id) into single post entries with multiple media items.
         Distinguishes video_notes (circles) from regular videos.
         """
+        from telethon.tl.types import MessageService
+
         entity = await self.client.get_entity(peer_id)
         raw_messages: list = []
         async for msg in self.client.iter_messages(entity, limit=limit, min_id=min_id):
             if msg.id <= min_id:
+                continue
+            if isinstance(msg, MessageService):
+                continue
+            if not msg.text and not msg.raw_text and not msg.media:
                 continue
             raw_messages.append(msg)
 

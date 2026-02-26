@@ -115,17 +115,23 @@ async def list_targets(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List saved MAX target chats."""
+    """List saved MAX target chats (deduplicated by chat_id)."""
     result = await db.execute(
-        select(MaxTarget).where(MaxTarget.user_id == user.id)
+        select(MaxTarget)
+        .where(MaxTarget.user_id == user.id)
+        .order_by(MaxTarget.chat_id)
     )
     targets = result.scalars().all()
-    return [
-        {
+    seen: set[int] = set()
+    unique: list[dict] = []
+    for t in targets:
+        if t.chat_id in seen:
+            continue
+        seen.add(t.chat_id)
+        unique.append({
             "id": str(t.id),
             "chat_id": t.chat_id,
             "title": t.title,
             "type": t.type,
-        }
-        for t in targets
-    ]
+        })
+    return unique
