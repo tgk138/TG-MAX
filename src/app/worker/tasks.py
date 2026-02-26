@@ -310,9 +310,152 @@ async def _generate_publish_units(db: AsyncSession, migration_id: uuid.UUID, sel
 
 
 @celery.task(bind=True, max_retries=0)
+def poll_autopost_links(self):
+    """Periodic task: check all active autopost links for new posts and forward them."""
+    _run_async(_poll_autopost_links())
+
+
+@celery.task(bind=True, max_retries=0)
 def publish_to_max(self, migration_id: str):
     """Publish imported content to MAX messenger."""
     _run_async(_publish_to_max(uuid.UUID(migration_id)))
+
+
+async def _poll_autopost_links():
+    """Check active autopost links and forward new posts to MAX."""
+    from app.models.autopost import AutopostLink, AutopostStatus
+    from app.models.max_connection import MaxConnection
+    from app.models.tg_connection import TgConnection
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(AutopostLink).where(
+                AutopostLink.is_active.is_(True),
+                AutopostLink.status == AutopostStatus.active,
+            )
+        )
+        links = result.scalars().all()
+
+    for link in links:
+        try:
+            await _process_autopost_link(link)
+        except Exception as e:
+            logger.exception("Autopost link %s failed: %s", link.id, e)
+            async with async_session() as db:
+                await db.execute(
+                    update(AutopostLink)
+                    .where(AutopostLink.id == link.id)
+                    .values(
+                        status=AutopostStatus.failed,
+                        error_text=str(e)[:500],
+                    )
+                )
+                await db.commit()
+
+
+async def _process_autopost_link(link):
+    """Process a single autopost link: fetch new TG posts, forward to MAX."""
+    from app.models.autopost import AutopostLink
+    from app.models.max_connection import MaxConnection
+    from app.models.tg_connection import TgConnection
+
+    async with async_session() as db:
+        tg_conn = await db.get(TgConnection, link.tg_connection_id)
+        max_conn = await db.get(MaxConnection, link.max_connection_id)
+
+        if not tg_conn or not tg_conn.session_encrypted:
+            raise RuntimeError("TG connection missing or not authenticated")
+        if not max_conn or not max_conn.bot_token_encrypted:
+            raise RuntimeError("MAX connection missing")
+
+        session_string = secrets.decrypt(tg_conn.session_encrypted)
+        bot_token = secrets.decrypt(max_conn.bot_token_encrypted)
+
+    tg_service = TelegramService(session_string)
+    max_client = MaxClient(bot_token)
+
+    try:
+        await tg_service.connect()
+        new_posts = await tg_service.fetch_new_posts(
+            peer_id=int(link.tg_channel_peer),
+            min_id=link.last_tg_message_id,
+            limit=20,
+        )
+
+        if not new_posts:
+            return
+
+        forwarded = 0
+        max_msg_id = link.last_tg_message_id
+
+        for post in new_posts:
+            try:
+                text, format_ = to_max_text_payload(post["text"])
+                attachments = None
+
+                if post["media_bytes"] and post["media_type"]:
+                    import os
+                    import tempfile
+
+                    upload_type = _max_upload_type(post["media_type"])
+                    upload = await max_client.request_upload(upload_type)
+
+                    ext = post.get("ext") or ".bin"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+                        tmp.write(post["media_bytes"])
+                        tmp_path = tmp.name
+
+                    try:
+                        uploaded_token = await max_client.upload_file(upload.url, tmp_path)
+                    finally:
+                        os.unlink(tmp_path)
+
+                    token = uploaded_token or upload.token
+                    if token:
+                        attachments = [{"type": upload_type, "payload": {"token": token}}]
+
+                if text or attachments:
+                    await max_client.send_message_with_retry(
+                        chat_id=link.max_chat_id,
+                        text=text,
+                        attachments=attachments,
+                        format_=format_,
+                    )
+                    forwarded += 1
+
+                max_msg_id = max(max_msg_id, post["message_id"])
+
+                delay = random.uniform(
+                    settings.PUBLISH_DELAY_MS_MIN / 1000.0,
+                    settings.PUBLISH_DELAY_MS_MAX / 1000.0,
+                )
+                await asyncio.sleep(delay)
+
+            except Exception as e:
+                logger.warning("Failed to forward autopost msg %d: %s", post["message_id"], e)
+                max_msg_id = max(max_msg_id, post["message_id"])
+
+        async with async_session() as db:
+            await db.execute(
+                update(AutopostLink)
+                .where(AutopostLink.id == link.id)
+                .values(
+                    last_tg_message_id=max_msg_id,
+                    forwarded_count=AutopostLink.forwarded_count + forwarded,
+                    error_text=None,
+                )
+            )
+            await db.commit()
+
+        if forwarded > 0:
+            logger.info(
+                "Autopost link %s: forwarded %d new posts (last_msg_id=%d)",
+                link.id, forwarded, max_msg_id,
+            )
+
+    finally:
+        await tg_service.disconnect()
+        await max_client.close()
 
 
 async def _publish_to_max(migration_id: uuid.UUID):

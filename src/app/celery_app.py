@@ -27,12 +27,17 @@ celery.conf.update(
         "app.worker.tasks.prepare_selected_for_publish": {"queue": "import"},
         "app.worker.tasks.fail_stale_importing": {"queue": "import"},
         "app.worker.tasks.publish_to_max": {"queue": "publish"},
+        "app.worker.tasks.poll_autopost_links": {"queue": "publish"},
     },
     beat_schedule={
         "fail-stale-importing-every-2-min": {
             "task": "app.worker.tasks.fail_stale_importing",
             "schedule": schedule(max(30, int(settings.IMPORT_STALE_CHECK_SECONDS))),
-        }
+        },
+        "poll-autopost-links-every-2-min": {
+            "task": "app.worker.tasks.poll_autopost_links",
+            "schedule": schedule(120),
+        },
     },
 )
 

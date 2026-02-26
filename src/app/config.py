@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     PUBLISH_DELAY_MS_MAX: int = 800
     UPLOAD_RETRY: int = 5
     SEND_RETRY: int = 5
-    TG_IMPORT_BATCH_SIZE: int = 100
-    TG_IMPORT_DELAY_MS: int = 500
+    TG_IMPORT_BATCH_SIZE: int = 50
+    TG_IMPORT_DELAY_MS: int = 100
     IMPORT_STALE_TTL_MINUTES: int = 60
     IMPORT_STALE_CHECK_SECONDS: int = 120
 

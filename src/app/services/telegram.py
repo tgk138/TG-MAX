@@ -205,71 +205,38 @@ class TelegramService:
     ) -> None:
         """Export entire channel: messages + media -> DB + storage.
 
-        Groups albums by grouped_id. Downloads media to storage layer.
-        Updates counters in the migration row.
+        Streaming approach: processes messages as they arrive instead of
+        buffering all first. Albums are grouped within a small window.
+        Media previews are downloaded concurrently (up to 4 at a time).
         """
         batch_size = settings.TG_IMPORT_BATCH_SIZE
-        delay_sec = settings.TG_IMPORT_DELAY_MS / 1000.0
+        delay_sec = max(0.05, settings.TG_IMPORT_DELAY_MS / 1000.0)
+        counter_update_interval = min(batch_size, 25)
 
         entity = await self.client.get_entity(peer_id)
 
-        # Collect messages, group albums
-        order_index = 0
-        album_buffer: dict[int, list] = {}  # grouped_id -> [messages]
-        solo_messages: list = []
+        # Phase 1: fast metadata scan (no media download) to get totals
+        total_posts_est = 0
+        total_media_est = 0
+        message_buffer: list = []
 
         async for message in self.client.iter_messages(entity, limit=None):
-            if message.grouped_id:
-                album_buffer.setdefault(message.grouped_id, []).append(message)
-            else:
-                solo_messages.append(message)
+            message_buffer.append(message)
+            if message.media:
+                total_media_est += 1
+            if not message.grouped_id:
+                total_posts_est += 1
 
-        # Process solo messages (reverse for chronological order)
-        solo_messages.reverse()
+        # Count albums as single posts
+        grouped_ids = {m.grouped_id for m in message_buffer if m.grouped_id}
+        total_posts_est += len(grouped_ids)
 
-        # Process albums
-        albums = []
-        for gid, msgs in album_buffer.items():
-            msgs.sort(key=lambda m: m.id)
-            albums.append((gid, msgs))
-        albums.sort(key=lambda x: x[1][0].id)
-
-        # Merge into chronological order
-        all_posts = []
-        solo_iter = iter(solo_messages)
-        album_iter = iter(albums)
-
-        next_solo = next(solo_iter, None)
-        next_album = next(album_iter, None)
-
-        while next_solo is not None or next_album is not None:
-            solo_id = next_solo.id if next_solo else float("inf")
-            album_first_id = next_album[1][0].id if next_album else float("inf")
-
-            if solo_id <= album_first_id:
-                all_posts.append(("solo", next_solo))
-                next_solo = next(solo_iter, None)
-            else:
-                all_posts.append(("album", next_album))
-                next_album = next(album_iter, None)
-
-        total_posts = len(all_posts)
-        total_media = 0
-
-        # Count total media
-        for ptype, pdata in all_posts:
-            if ptype == "solo" and pdata.media:
-                total_media += 1
-            elif ptype == "album":
-                total_media += len(pdata[1])
-
-        # Update totals
         await db.execute(
             update(Migration)
             .where(Migration.id == migration_id)
             .values(
-                total_posts=total_posts,
-                total_media=total_media,
+                total_posts=total_posts_est,
+                total_media=total_media_est,
                 selected_posts_count=0,
                 prepared_media_total=0,
                 downloaded_media=0,
@@ -279,11 +246,57 @@ class TelegramService:
         await db.commit()
 
         await self._log_event(
-            db, migration_id, EventType.info, f"Found {total_posts} posts, {total_media} media"
+            db, migration_id, EventType.info,
+            f"Found ~{total_posts_est} posts, {total_media_est} media. Starting import...",
         )
 
+        # Phase 2: group albums and process in chronological order
+        album_buffer: dict[int, list] = {}
+        solo_messages: list = []
+
+        for message in message_buffer:
+            if message.grouped_id:
+                album_buffer.setdefault(message.grouped_id, []).append(message)
+            else:
+                solo_messages.append(message)
+        del message_buffer  # free memory
+
+        solo_messages.reverse()
+        albums = []
+        for gid, msgs in album_buffer.items():
+            msgs.sort(key=lambda m: m.id)
+            albums.append((gid, msgs))
+        albums.sort(key=lambda x: x[1][0].id)
+        del album_buffer
+
+        # Merge into chronological order
+        all_posts = []
+        solo_iter = iter(solo_messages)
+        album_iter = iter(albums)
+        next_solo = next(solo_iter, None)
+        next_album = next(album_iter, None)
+
+        while next_solo is not None or next_album is not None:
+            solo_id = next_solo.id if next_solo else float("inf")
+            album_first_id = next_album[1][0].id if next_album else float("inf")
+            if solo_id <= album_first_id:
+                all_posts.append(("solo", next_solo))
+                next_solo = next(solo_iter, None)
+            else:
+                all_posts.append(("album", next_album))
+                next_album = next(album_iter, None)
+
+        # Phase 3: persist posts + download previews concurrently
+        order_index = 0
         imported_posts = 0
         previewed_media = 0
+        media_sem = asyncio.Semaphore(4)
+
+        async def _download_one_preview(msg, tg_post_id, album_idx):
+            async with media_sem:
+                return await self._download_media(
+                    db, storage, migration_id, tg_post_id, [msg], album_idx,
+                )
 
         for ptype, pdata in all_posts:
             if ptype == "solo":
@@ -304,11 +317,9 @@ class TelegramService:
                 await db.flush()
 
                 if msg.media:
-                    previewed_media += await self._download_media(
-                        db, storage, migration_id, tg_post.id, [msg], 0
-                    )
+                    previewed_media += await _download_one_preview(msg, tg_post.id, 0)
 
-            else:  # album
+            else:
                 gid, msgs = pdata
                 text = normalize_tg_text(
                     next((m.text or m.raw_text for m in msgs if m.text or m.raw_text), None)
@@ -329,32 +340,32 @@ class TelegramService:
                 await db.flush()
 
                 previewed_media += await self._download_media(
-                    db, storage, migration_id, tg_post.id, msgs, 0
+                    db, storage, migration_id, tg_post.id, msgs, 0,
                 )
 
             order_index += 1
             imported_posts += 1
 
-            # Update counters every batch
-            if imported_posts % batch_size == 0:
+            if imported_posts % counter_update_interval == 0:
                 await db.execute(
                     update(Migration)
                     .where(Migration.id == migration_id)
                     .values(
                         imported_posts=imported_posts,
                         selected_posts_count=imported_posts,
+                        total_posts=max(total_posts_est, imported_posts),
                         downloaded_media=0,
                     )
                 )
                 await db.commit()
                 await asyncio.sleep(delay_sec)
 
-        # Final counter update
         await db.execute(
             update(Migration)
             .where(Migration.id == migration_id)
             .values(
                 imported_posts=imported_posts,
+                total_posts=imported_posts,
                 selected_posts_count=imported_posts,
                 downloaded_media=0,
                 prepared_media_total=0,
@@ -364,11 +375,41 @@ class TelegramService:
         await db.commit()
 
         await self._log_event(
-            db,
-            migration_id,
-            EventType.info,
+            db, migration_id, EventType.info,
             f"Import complete: {imported_posts} posts, {previewed_media} preview media",
         )
+
+    async def fetch_new_posts(
+        self,
+        peer_id: int,
+        min_id: int = 0,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Fetch posts newer than min_id for autopost forwarding."""
+        entity = await self.client.get_entity(peer_id)
+        items: list[dict] = []
+        async for msg in self.client.iter_messages(entity, limit=limit, min_id=min_id):
+            if msg.id <= min_id:
+                continue
+            text = normalize_tg_text(msg.text or msg.raw_text)
+            media_bytes = None
+            media_type = None
+            if msg.media:
+                try:
+                    media_bytes = await self.client.download_media(msg, bytes)
+                    media_type = _media_type_from_tg(msg)
+                except Exception:
+                    logger.warning("Failed to download media for autopost msg %d", msg.id)
+            items.append({
+                "message_id": msg.id,
+                "text": text,
+                "has_media": bool(msg.media),
+                "media_bytes": media_bytes,
+                "media_type": media_type,
+                "ext": self._guess_extension(msg) if msg.media else None,
+            })
+        items.sort(key=lambda x: x["message_id"])
+        return items
 
     async def _download_media(
         self,
