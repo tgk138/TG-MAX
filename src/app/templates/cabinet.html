@@ -105,9 +105,9 @@
 
     {% if migrations %}
         {% for migration in migrations %}
-        <a href="/migration?mid={{ migration.id }}" class="migration-card">
+        <div class="migration-card" id="mig-{{ migration.id }}">
             <div class="flex flex-between" style="gap:.7rem;">
-                <div>
+                <a href="/migration?mid={{ migration.id }}" style="text-decoration:none; color:inherit; flex:1;">
                     <div style="font-weight:700;">{{ migration.tg_channel_title }}</div>
                     <div class="text-muted" style="font-size:.85rem;">
                         {% if migration.max_target_chat_id %}
@@ -117,10 +117,16 @@
                         {% endif %}
                         · {{ migration.created_at.strftime('%d.%m.%Y %H:%M') if migration.created_at else '' }}
                     </div>
+                </a>
+                <div class="flex" style="gap:.4rem; align-items:center;">
+                    <span class="status-badge status-{{ migration.status.value }}">{{ migration.status.value }}</span>
+                    <button class="btn btn-danger" style="padding:.3rem .6rem; font-size:.8rem;"
+                            onclick="event.stopPropagation(); confirmAction('Удалить миграцию?','Все посты, медиа и данные миграции «{{ migration.tg_channel_title }}» будут удалены безвозвратно.',()=>deleteMigration('{{ migration.id }}'),'Удалить')">
+                        <span class="btn-text">✕</span>
+                    </button>
                 </div>
-                <span class="status-badge status-{{ migration.status.value }}">{{ migration.status.value }}</span>
             </div>
-        </a>
+        </div>
         {% endfor %}
     {% else %}
         <div class="empty-state">
@@ -131,4 +137,27 @@
         </div>
     {% endif %}
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+window.deleteMigration = async function(id) {
+    try {
+        await apiFetch('/api/migrations/' + id, { method: 'DELETE' });
+        showToast('Миграция удалена', 'success');
+        const el = document.getElementById('mig-' + id);
+        if (el) {
+            el.style.animation = 'fadeOut .3s ease forwards';
+            setTimeout(() => { el.remove(); updateStats(); }, 300);
+        }
+    } catch(e) {}
+};
+
+function updateStats() {
+    const cards = document.querySelectorAll('[id^="mig-"]');
+    if (cards.length === 0) {
+        location.reload();
+    }
+}
+</script>
 {% endblock %}
