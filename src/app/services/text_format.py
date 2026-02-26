@@ -6,7 +6,7 @@ import re
 
 _BULLET_RE = re.compile(r"(?m)^\s*[•●◦]\s+")
 _MARKDOWN_HINT_RE = re.compile(
-    r"(\*\*[\s\S]+?\*\*|__[\s\S]+?__|~~[\s\S]+?~~|`[^`\n]+`|\[[^\]]+\]\(https?://[^)]+\))"
+    r"(\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|`[^`\n]+`|\[[^\]]+\]\(https?://[^)]+\))"
 )
 
 
@@ -47,13 +47,13 @@ def _tg_markdown_to_max_markdown(text: str) -> str:
         return token
     content = re.sub(r"`[^`\n]+`", _save_code, content)
 
-    # **bold** → *bold* (Telegram double → MAX single)
-    content = re.sub(r"\*\*([\s\S]+?)\*\*", r"*\1*", content)
+    # **bold** → *bold* (same line only, no * inside)
+    content = re.sub(r"\*\*([^*\n]+)\*\*", r"*\1*", content)
     # __bold__ → *bold*
-    content = re.sub(r"__([\s\S]+?)__", r"*\1*", content)
+    content = re.sub(r"__([^_\n]+)__", r"*\1*", content)
 
-    # ~~strike~~ → ~strike~ (Telegram double → MAX single)
-    content = re.sub(r"~~([\s\S]+?)~~", r"~\1~", content)
+    # ~~strike~~ → ~strike~ (same line only)
+    content = re.sub(r"~~([^~\n]+)~~", r"~\1~", content)
 
     # _italic_ stays as _italic_ (same syntax)
     # `code` stays as `code` (same syntax)

@@ -267,9 +267,9 @@ function renderTelegramMarkdown(text) {
     });
     content = content.replace(/`([^`\n]+)`/g, '<code style="padding:.1rem .35rem; border:1px solid var(--border); border-radius:6px; background:var(--surface-2);">$1</code>');
     content = content.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">$1</a>');
-    content = content.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
-    content = content.replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
-    content = content.replace(/~~([\s\S]+?)~~/g, '<s>$1</s>');
+    content = content.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    content = content.replace(/~~([^~\n]+)~~/g, '<s>$1</s>');
     content = content.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
     content = content.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
     content = content.replace(/\n/g, '<br>');
