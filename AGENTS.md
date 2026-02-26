@@ -41,8 +41,25 @@ The `.env` file must exist in the workspace root (copy from `.env.example` and s
 - **Tests:** `pytest` (all tests mock the DB, no running PostgreSQL/Redis required for tests)
 - **Build:** No separate build step; the app runs directly via uvicorn
 
+### Celery workers (required for import/publish/autopost)
+
+Celery **must** be started from the workspace root (`/workspace`) so pydantic-settings picks up `.env`. Running from `src/` will use docker-compose defaults (`redis:6379` instead of `localhost:6379`).
+
+```bash
+# Import worker (handles import_channel, prepare_publish)
+cd /workspace && PYTHONPATH=src celery -A app.celery_app:celery worker -l info -Q import --concurrency=2 --hostname=import@%h
+
+# Publish worker (handles publish_to_max, poll_autopost_links)
+cd /workspace && PYTHONPATH=src celery -A app.celery_app:celery worker -l info -Q publish --concurrency=2 --hostname=publish@%h
+
+# Beat scheduler (periodic tasks: stale import watchdog + autopost polling every 2min)
+cd /workspace && PYTHONPATH=src celery -A app.celery_app:celery beat -l info
+```
+
+Without workers, migrations stay stuck at `importing` and autopost links never fire.
+
 ### Gotchas
 
 - Pip installs to `~/.local/bin` by default; ensure it is on `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
 - The `MEDIA_ROOT` directory must exist before the app starts (it mounts a `StaticFiles` directory at startup).
-- Celery workers require Redis to be running but are not needed for basic API/UI testing.
+- **Critical:** Celery workers must run from `/workspace` (not `src/`) for `.env` to be loaded correctly. Use `PYTHONPATH=src` to resolve imports.
