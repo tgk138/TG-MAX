@@ -67,9 +67,6 @@ def _markdown_to_html(text: str) -> str:
     content = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", content)
     content = re.sub(r"(?<!_)_([^_\n]+)_(?!_)", r"<i>\1</i>", content)
 
-    # Newlines
-    content = content.replace("\n", "<br>")
-
     # Restore code blocks and inline codes
     for i, block in enumerate(blocks):
         content = content.replace(f"\x00CB{i}\x00", block)
