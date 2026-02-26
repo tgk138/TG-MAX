@@ -10,10 +10,22 @@ _MARKDOWN_HINT_RE = re.compile(
 )
 
 
-def normalize_tg_text(text: str | None) -> str | None:
-    """Normalize Telegram text while preserving user formatting."""
+def normalize_tg_text(text: str | None, entities=None) -> str | None:
+    """Normalize Telegram text, preserving formatting from entities as markdown.
+
+    If entities are provided (from Telethon message), converts them to
+    Telegram-style markdown (**bold**, __italic__, etc.).
+    """
     if not text:
         return None
+
+    if entities:
+        try:
+            from telethon.extensions import markdown as tg_md
+            text = tg_md.unparse(text, entities)
+        except Exception:
+            pass
+
     cleaned = text.replace("\r\n", "\n").strip()
     if not cleaned:
         return None

@@ -183,7 +183,7 @@ class TelegramService:
         entity = await self.client.get_entity(peer_id)
         items: list[dict] = []
         async for msg in self.client.iter_messages(entity, limit=limit):
-            text = normalize_tg_text(msg.text or msg.raw_text)
+            text = normalize_tg_text(msg.text or msg.raw_text, getattr(msg, 'entities', None))
             items.append(
                 {
                     "message_id": msg.id,
@@ -314,7 +314,7 @@ class TelegramService:
                     tg_message_id=msg.id,
                     album_key=None,
                     order_index=order_index,
-                    text=normalize_tg_text(msg.text or msg.raw_text),
+                    text=normalize_tg_text(msg.text or msg.raw_text, getattr(msg, 'entities', None)),
                     has_media=msg.media is not None,
                     posted_at=_to_naive_utc(getattr(msg, "date", None)),
                     views=int(getattr(msg, "views", 0) or 0),
@@ -329,8 +329,10 @@ class TelegramService:
 
             else:
                 gid, msgs = pdata
+                text_msg = next((m for m in msgs if m.text or m.raw_text), None)
                 text = normalize_tg_text(
-                    next((m.text or m.raw_text for m in msgs if m.text or m.raw_text), None)
+                    text_msg.text or text_msg.raw_text if text_msg else None,
+                    getattr(text_msg, 'entities', None) if text_msg else None,
                 )
                 tg_post = TgPost(
                     migration_id=migration_id,
@@ -434,7 +436,7 @@ class TelegramService:
         for entry_type, entry_data in all_entries:
             if entry_type == "solo":
                 msg = entry_data
-                text = normalize_tg_text(msg.text or msg.raw_text)
+                text = normalize_tg_text(msg.text or msg.raw_text, getattr(msg, 'entities', None))
                 media_list = []
                 if msg.media:
                     media_item = await self._download_for_autopost(msg)
@@ -447,8 +449,10 @@ class TelegramService:
                 })
             else:
                 msgs = entry_data
+                text_msg = next((m for m in msgs if m.text or m.raw_text), None)
                 text = normalize_tg_text(
-                    next((m.text or m.raw_text for m in msgs if m.text or m.raw_text), None)
+                    text_msg.text or text_msg.raw_text if text_msg else None,
+                    getattr(text_msg, 'entities', None) if text_msg else None,
                 )
                 media_list = []
                 for msg in msgs:
