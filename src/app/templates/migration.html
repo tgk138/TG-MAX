@@ -688,20 +688,30 @@ window.confirmAndStartPublish = async function() {
 async function loadTargets() {
     const sel = document.getElementById('max-target-select');
     try {
-        let data = await apiFetch('/api/max/targets');
-        if (!data || data.length === 0) {
-            try { await apiFetch('/api/max/sync_targets', { method: 'POST' }); } catch(e) {}
-            data = await apiFetch('/api/max/targets');
+        let resp = await fetch('/api/max/targets', { credentials: 'same-origin' });
+        let data = resp.ok ? await resp.json() : [];
+
+        if ((!data || data.length === 0) && resp.ok) {
+            await fetch('/api/max/sync_targets', { method: 'POST', credentials: 'same-origin' });
+            resp = await fetch('/api/max/targets', { credentials: 'same-origin' });
+            data = resp.ok ? await resp.json() : [];
         }
+
+        if (data && data.length > 0) {
+            sel.innerHTML = '<option value="">Выберите цель MAX...</option>';
+            data.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = String(t.chat_id);
+                opt.textContent = `${t.title} (ID: ${t.chat_id})`;
+                if (migrationState && migrationState.max_target_chat_id === t.chat_id) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } else {
+            sel.innerHTML = '<option value="">Нет целей MAX (подключите бота)</option>';
+        }
+    } catch(e) {
         sel.innerHTML = '<option value="">Выберите цель MAX...</option>';
-        data.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = String(t.chat_id);
-            opt.textContent = `${t.title} (ID: ${t.chat_id})`;
-            if (migrationState && migrationState.max_target_chat_id === t.chat_id) opt.selected = true;
-            sel.appendChild(opt);
-        });
-    } catch(e) { sel.innerHTML = '<option value="">Ошибка загрузки</option>'; }
+    }
 }
 
 async function poll() {
