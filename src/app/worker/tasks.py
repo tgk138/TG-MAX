@@ -628,8 +628,10 @@ async def _publish_unit(
     post: TgPost,
 ):
     """Upload media and send a single publish unit to MAX."""
+    import os
+    import tempfile
+
     async with async_session() as db:
-        # Mark uploading
         await db.execute(
             update(PublishUnit)
             .where(PublishUnit.id == unit.id)
@@ -637,7 +639,6 @@ async def _publish_unit(
         )
         await db.commit()
 
-        # Get media for this unit
         result = await db.execute(
             select(TgMedia)
             .where(TgMedia.tg_post_id == unit.tg_post_id)
@@ -646,39 +647,41 @@ async def _publish_unit(
         all_media = result.scalars().all()
         unit_media = all_media[unit.attachments_from : unit.attachments_to]
 
-        # Upload media and build attachments
         attachments = []
         for media in unit_media:
-            upload_type = _max_upload_type(media.media_type)
-            upload = await max_client.request_upload(upload_type)
-
-            # Read from storage and save to temp, then upload
-            data = await storage.read(media.file_path)
-
-            import tempfile
-            import os
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(media.file_path)[1]) as tmp:
-                tmp.write(data)
-                tmp_path = tmp.name
-
-            try:
-                uploaded_token = await max_client.upload_file(upload.url, tmp_path)
-            finally:
-                os.unlink(tmp_path)
-
-            attachment_token = uploaded_token or upload.token
-            if not attachment_token:
-                raise RuntimeError(
-                    f"Upload token missing for media={media.id} type={upload_type}"
+            # Skip missing files (not downloaded from TG)
+            file_exists = await storage.exists(media.file_path)
+            if not file_exists:
+                logger.warning(
+                    "Skipping missing media file %s for unit %s",
+                    media.file_path, unit.id,
                 )
+                continue
 
-            attachments.append({
-                "type": upload_type,
-                "payload": {"token": attachment_token},
-            })
+            upload_type = _max_upload_type(media.media_type)
+            try:
+                upload = await max_client.request_upload(upload_type)
+                data = await storage.read(media.file_path)
 
-        # Mark sending
+                with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(media.file_path)[1]) as tmp:
+                    tmp.write(data)
+                    tmp_path = tmp.name
+
+                try:
+                    uploaded_token = await max_client.upload_file(upload.url, tmp_path)
+                finally:
+                    os.unlink(tmp_path)
+
+                attachment_token = uploaded_token or upload.token
+                if attachment_token:
+                    attachments.append({
+                        "type": upload_type,
+                        "payload": {"token": attachment_token},
+                    })
+            except Exception as e:
+                logger.warning("Failed to upload media %s: %s", media.id, e)
+                continue
+
         await db.execute(
             update(PublishUnit)
             .where(PublishUnit.id == unit.id)
@@ -686,7 +689,6 @@ async def _publish_unit(
         )
         await db.commit()
 
-        # Send message
         raw_text = post.text if unit.unit_index == 0 else None
         text, format_ = to_max_text_payload(raw_text)
         if not text and not attachments:

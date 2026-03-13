@@ -238,8 +238,8 @@ class MaxClient:
         max_retries: int | None = None,
     ) -> dict[str, Any]:
         """Send message with retry on 'attachment.not.ready' error."""
-        retries = max_retries or settings.SEND_RETRY
-        backoff = [0.5, 1.0, 2.0, 4.0, 8.0]
+        retries = max_retries or max(settings.SEND_RETRY, 10)
+        backoff = [1.0, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0]
 
         for attempt in range(retries):
             try:
