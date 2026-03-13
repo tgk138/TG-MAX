@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from app.api.deps import get_db
 from app.api.telegram import AUTH_FLOW_COOKIE, router as tg_router
@@ -37,6 +38,15 @@ class FakeTelegramService:
 
     async def disconnect(self):
         return None
+
+
+@pytest.fixture(autouse=True)
+def clear_auth_flows():
+    from app.api import telegram
+
+    telegram._auth_flows.clear()
+    yield
+    telegram._auth_flows.clear()
 
 
 def build_client(monkeypatch) -> TestClient:

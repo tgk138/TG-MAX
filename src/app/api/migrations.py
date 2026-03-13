@@ -413,7 +413,8 @@ async def select_posts(
     await _get_user_migration(db, migration_id, user.id)
 
     query = update(TgPost).where(TgPost.migration_id == migration_id)
-    if body.post_ids:
+    # Explicit empty list means "update none", while None means "use filters/all".
+    if body.post_ids is not None:
         query = query.where(TgPost.id.in_(body.post_ids))
     else:
         if body.min_views is not None:
