@@ -47,3 +47,4 @@ class Migration(Base, TimestampMixin):
     selected_posts_count: Mapped[int] = mapped_column(Integer, default=0)
     prepared_media_total: Mapped[int] = mapped_column(Integer, default=0)
     preparing_media: Mapped[bool] = mapped_column(Boolean, default=False)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)

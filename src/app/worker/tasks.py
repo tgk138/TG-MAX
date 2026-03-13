@@ -507,7 +507,16 @@ async def _publish_to_max(migration_id: uuid.UUID):
 
         published_so_far = 0
         failed_so_far = 0
+        cancelled = False
         for unit, post in units_with_posts:
+            # Check cancel flag
+            async with async_session() as check_db:
+                mig = await check_db.get(Migration, migration_id)
+                if mig and mig.cancel_requested:
+                    cancelled = True
+                    logger.info("Publish cancelled by user for migration %s", migration_id)
+                    break
+
             try:
                 await _publish_unit(db, max_client, storage, chat_id, unit, post)
                 published_so_far += 1
@@ -526,7 +535,7 @@ async def _publish_to_max(migration_id: uuid.UUID):
                     )
                     await db.commit()
 
-            # Update progress after each unit
+            # Update progress every 5 units
             if (published_so_far + failed_so_far) % 5 == 0 or published_so_far + failed_so_far == len(units_with_posts):
                 async with async_session() as db:
                     await db.execute(
@@ -542,6 +551,25 @@ async def _publish_to_max(migration_id: uuid.UUID):
                 settings.PUBLISH_DELAY_MS_MAX / 1000.0,
             )
             await asyncio.sleep(delay)
+
+        if cancelled:
+            async with async_session() as db:
+                await db.execute(
+                    update(Migration)
+                    .where(Migration.id == migration_id)
+                    .values(
+                        status=MigrationStatus.imported,
+                        published_units=published_so_far,
+                        failed_units=failed_so_far,
+                        cancel_requested=False,
+                    )
+                )
+                await db.commit()
+                await _log_event(
+                    db, migration_id, EventPhase.publish, EventType.warning,
+                    f"Publication stopped by user. Published: {published_so_far}",
+                )
+            return
 
         # Update migration counters and status
         async with async_session() as db:

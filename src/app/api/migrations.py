@@ -194,63 +194,16 @@ async def stop_publish(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Stop publishing: revoke task, mark remaining units as pending, set status to imported."""
+    """Stop publishing: set cancel flag, worker checks it after each unit."""
     migration = await _get_user_migration(db, migration_id, user.id)
 
     if migration.status != MigrationStatus.publishing:
         raise HTTPException(409, "Migration is not publishing.")
 
-    # Cancel pending publish units (leave sent ones as-is)
-    from app.celery_app import celery as celery_app
-    celery_app.control.revoke(
-        f"publish-{migration_id}",
-        terminate=True,
-        signal="SIGTERM",
-    )
-
-    # Count what was already sent
-    sent_result = await db.execute(
-        select(func.count(PublishUnit.id))
-        .join(TgPost, PublishUnit.tg_post_id == TgPost.id)
-        .where(
-            TgPost.migration_id == migration_id,
-            PublishUnit.status == PublishUnitStatus.sent,
-        )
-    )
-    sent_count = int(sent_result.scalar_one() or 0)
-
-    failed_result = await db.execute(
-        select(func.count(PublishUnit.id))
-        .join(TgPost, PublishUnit.tg_post_id == TgPost.id)
-        .where(
-            TgPost.migration_id == migration_id,
-            PublishUnit.status == PublishUnitStatus.failed,
-        )
-    )
-    failed_count = int(failed_result.scalar_one() or 0)
-
-    # Reset in-flight units back to pending
-    await db.execute(
-        update(PublishUnit)
-        .where(
-            PublishUnit.tg_post_id.in_(
-                select(TgPost.id).where(TgPost.migration_id == migration_id)
-            ),
-            PublishUnit.status.in_([
-                PublishUnitStatus.pending,
-                PublishUnitStatus.uploading,
-                PublishUnitStatus.sending,
-            ]),
-        )
-        .values(status=PublishUnitStatus.pending)
-    )
-
-    migration.status = MigrationStatus.imported
-    migration.published_units = sent_count
-    migration.failed_units = failed_count
+    migration.cancel_requested = True
     await db.commit()
 
-    return {"ok": True, "published": sent_count, "remaining": "stopped"}
+    return {"ok": True, "status": "cancelling"}
 
 
 @router.get("/{migration_id}")
