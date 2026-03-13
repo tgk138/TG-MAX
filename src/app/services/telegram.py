@@ -156,7 +156,7 @@ class TelegramService:
     # --- Channel operations ---
 
     async def list_channels(self) -> list[ChannelInfo]:
-        """List only broadcast channels where user is admin/creator."""
+        """List broadcast channels where user is a member (subscriber, admin, or creator)."""
         channels = []
         async for dialog in self.client.iter_dialogs():
             if not dialog.is_channel:
@@ -164,9 +164,10 @@ class TelegramService:
 
             entity = dialog.entity
             is_broadcast = bool(getattr(entity, "broadcast", False))
-            is_admin = bool(getattr(dialog, "is_admin", False) or getattr(entity, "creator", False))
-            if not is_broadcast or not is_admin:
+            if not is_broadcast:
                 continue
+
+            is_admin = bool(getattr(dialog, "is_admin", False) or getattr(entity, "creator", False))
 
             channels.append(
                 ChannelInfo(
