@@ -30,11 +30,9 @@ def test_logout_clears_cookie_and_deletes_session(monkeypatch):
     app.include_router(auth_router)
     app.dependency_overrides[get_db] = override_db
     client = TestClient(app)
+    client.cookies.set(settings.SESSION_COOKIE_NAME, "session-abc", path="/")
 
-    response = client.post(
-        "/api/auth/logout",
-        cookies={settings.SESSION_COOKIE_NAME: "session-abc"},
-    )
+    response = client.post("/api/auth/logout")
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
