@@ -47,6 +47,10 @@ class SelectPostsRequest(BaseModel):
     date_to: date | None = None
 
 
+class EditPostRequest(BaseModel):
+    text: str
+
+
 @router.get("")
 async def list_migrations(
     db: AsyncSession = Depends(get_db),
@@ -81,7 +85,6 @@ async def create_migration(
     """Create a new migration and start import immediately."""
     body = await parse_payload(request, CreateMigrationRequest)
 
-    # Get user's TG connection
     result = await db.execute(
         select(TgConnection).where(
             TgConnection.user_id == user.id,
@@ -104,7 +107,6 @@ async def create_migration(
     await db.commit()
     await db.refresh(migration)
 
-    # Start import right away so channel content appears on migration page.
     try:
         await transition(db, migration.id, MigrationStatus.importing)
     except InvalidTransition:
@@ -150,7 +152,7 @@ async def start_import(
     user: User = Depends(get_current_user),
 ):
     """Start importing from Telegram. Transition: draft -> importing."""
-    migration = await _get_user_migration(db, migration_id, user.id)
+    await _get_user_migration(db, migration_id, user.id)
 
     try:
         await transition(db, migration_id, MigrationStatus.importing)
@@ -186,6 +188,71 @@ async def start_publish(
     return {"ok": True}
 
 
+@router.post("/{migration_id}/stop_publish")
+async def stop_publish(
+    migration_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Stop publishing: revoke task, mark remaining units as pending, set status to imported."""
+    migration = await _get_user_migration(db, migration_id, user.id)
+
+    if migration.status != MigrationStatus.publishing:
+        raise HTTPException(409, "Migration is not publishing.")
+
+    # Cancel pending publish units (leave sent ones as-is)
+    from app.celery_app import celery as celery_app
+    celery_app.control.revoke(
+        f"publish-{migration_id}",
+        terminate=True,
+        signal="SIGTERM",
+    )
+
+    # Count what was already sent
+    sent_result = await db.execute(
+        select(func.count(PublishUnit.id))
+        .join(TgPost, PublishUnit.tg_post_id == TgPost.id)
+        .where(
+            TgPost.migration_id == migration_id,
+            PublishUnit.status == PublishUnitStatus.sent,
+        )
+    )
+    sent_count = int(sent_result.scalar_one() or 0)
+
+    failed_result = await db.execute(
+        select(func.count(PublishUnit.id))
+        .join(TgPost, PublishUnit.tg_post_id == TgPost.id)
+        .where(
+            TgPost.migration_id == migration_id,
+            PublishUnit.status == PublishUnitStatus.failed,
+        )
+    )
+    failed_count = int(failed_result.scalar_one() or 0)
+
+    # Reset in-flight units back to pending
+    await db.execute(
+        update(PublishUnit)
+        .where(
+            PublishUnit.tg_post_id.in_(
+                select(TgPost.id).where(TgPost.migration_id == migration_id)
+            ),
+            PublishUnit.status.in_([
+                PublishUnitStatus.pending,
+                PublishUnitStatus.uploading,
+                PublishUnitStatus.sending,
+            ]),
+        )
+        .values(status=PublishUnitStatus.pending)
+    )
+
+    migration.status = MigrationStatus.imported
+    migration.published_units = sent_count
+    migration.failed_units = failed_count
+    await db.commit()
+
+    return {"ok": True, "published": sent_count, "remaining": "stopped"}
+
+
 @router.get("/{migration_id}")
 async def get_migration(
     migration_id: uuid.UUID,
@@ -195,7 +262,6 @@ async def get_migration(
     """Get migration status, counters, and recent events."""
     migration = await _get_user_migration(db, migration_id, user.id)
 
-    # Get recent events
     result = await db.execute(
         select(JobEvent)
         .where(JobEvent.migration_id == migration_id)
@@ -486,47 +552,6 @@ async def prepare_publish(
     return {"ok": True, "status": "preparing"}
 
 
-@router.post("/{migration_id}/retry_failed")
-async def retry_failed(
-    migration_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Reset failed publish_units to pending and restart publishing."""
-    migration = await _get_user_migration(db, migration_id, user.id)
-
-    if migration.status not in (MigrationStatus.failed, MigrationStatus.done):
-        raise HTTPException(409, "Can only retry from failed or done status.")
-
-    # Reset failed units
-    result = await db.execute(
-        update(PublishUnit)
-        .where(
-            PublishUnit.tg_post_id.in_(
-                select(TgPost.id).where(TgPost.migration_id == migration_id)
-            ),
-            PublishUnit.status == PublishUnitStatus.failed,
-        )
-        .values(status=PublishUnitStatus.pending, error_code=None, error_text=None)
-    )
-    retried = result.rowcount
-
-    if retried == 0:
-        return {"ok": True, "retried": 0}
-
-    # Force status to publishing
-    migration.status = MigrationStatus.publishing
-    migration.failed_units = 0
-    await db.commit()
-
-    publish_to_max.delay(str(migration_id))
-    return {"ok": True, "retried": retried}
-
-
-class EditPostRequest(BaseModel):
-    text: str
-
-
 @router.patch("/{migration_id}/posts/{post_id}/edit")
 async def edit_post(
     migration_id: uuid.UUID,
@@ -547,6 +572,41 @@ async def edit_post(
     return {"ok": True}
 
 
+@router.post("/{migration_id}/retry_failed")
+async def retry_failed(
+    migration_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Reset failed publish_units to pending and restart publishing."""
+    migration = await _get_user_migration(db, migration_id, user.id)
+
+    if migration.status not in (MigrationStatus.failed, MigrationStatus.done):
+        raise HTTPException(409, "Can only retry from failed or done status.")
+
+    result = await db.execute(
+        update(PublishUnit)
+        .where(
+            PublishUnit.tg_post_id.in_(
+                select(TgPost.id).where(TgPost.migration_id == migration_id)
+            ),
+            PublishUnit.status == PublishUnitStatus.failed,
+        )
+        .values(status=PublishUnitStatus.pending, error_code=None, error_text=None)
+    )
+    retried = result.rowcount
+
+    if retried == 0:
+        return {"ok": True, "retried": 0}
+
+    migration.status = MigrationStatus.publishing
+    migration.failed_units = 0
+    await db.commit()
+
+    publish_to_max.delay(str(migration_id))
+    return {"ok": True, "retried": retried}
+
+
 @router.delete("/{migration_id}")
 async def delete_migration(
     migration_id: uuid.UUID,
@@ -554,10 +614,9 @@ async def delete_migration(
     user: User = Depends(get_current_user),
 ):
     """Delete migration and all related data + media files."""
-    migration = await _get_user_migration(db, migration_id, user.id)
+    await _get_user_migration(db, migration_id, user.id)
     storage = get_storage()
 
-    # Get all media paths to delete files
     result = await db.execute(
         select(TgMedia.file_path, TgMedia.preview_path, TgMedia.full_path)
         .join(TgPost)
@@ -569,14 +628,12 @@ async def delete_migration(
             if path:
                 paths.add(path)
 
-    # Delete from storage
     for path in paths:
         try:
             await storage.delete(path)
         except Exception:
             pass
 
-    # Cascade delete handles tg_posts, tg_media, publish_units, job_events
     await db.execute(delete(Migration).where(Migration.id == migration_id))
     await db.commit()
 
@@ -593,7 +650,6 @@ async def purge_account(
     from app.models.max_target import MaxTarget
     from app.models.tg_connection import TgConnection
 
-    # Delete media files
     storage = get_storage()
     result = await db.execute(
         select(TgMedia.file_path, TgMedia.preview_path, TgMedia.full_path)
@@ -612,7 +668,6 @@ async def purge_account(
         except Exception:
             pass
 
-    # Cascade deletes
     await db.execute(delete(Migration).where(Migration.user_id == user.id))
     await db.execute(delete(MaxTarget).where(MaxTarget.user_id == user.id))
     await db.execute(delete(MaxConnection).where(MaxConnection.user_id == user.id))

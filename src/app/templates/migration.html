@@ -224,6 +224,10 @@
             <span class="btn-text">Подтвердить и запустить</span>
         </button>
 
+        <button class="btn btn-danger" id="btn-stop-publish" style="display:none" type="button" onclick="stopPublish()">
+            <span class="btn-text">Остановить публикацию</span>
+        </button>
+
         <button class="btn btn-ghost" id="btn-retry" style="display:none"
                 hx-post="/api/migrations/{{ migration.id }}/retry_failed"
                 hx-target="#action-result" hx-swap="innerHTML">
@@ -626,6 +630,8 @@ function renderData(d) {
     document.getElementById('btn-import').style.display = d.status === 'draft' ? '' : 'none';
     document.getElementById('btn-confirm-publish').style.display =
         (d.status === 'imported' || d.status === 'done' || d.status === 'failed') ? '' : 'none';
+    document.getElementById('btn-stop-publish').style.display =
+        d.status === 'publishing' ? '' : 'none';
     document.getElementById('btn-retry').style.display =
         (d.status === 'failed' || d.status === 'done') && d.failed_units > 0 ? '' : 'none';
 
@@ -650,6 +656,21 @@ async function startPublish() {
     } catch(e) {}
     finally { publishStarted = false; }
 }
+
+window.stopPublish = async function() {
+    confirmAction(
+        'Остановить публикацию?',
+        'Уже опубликованные посты останутся в MAX. Неопубликованные можно будет отправить позже.',
+        async () => {
+            try {
+                const data = await apiFetch(`/api/migrations/${MID}/stop_publish`, { method: 'POST' });
+                showToast(`Публикация остановлена. Опубликовано: ${data.published}`, 'info');
+                await poll();
+            } catch(e) {}
+        },
+        'Остановить'
+    );
+};
 
 window.confirmAndStartPublish = async function() {
     try {
