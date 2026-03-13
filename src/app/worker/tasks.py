@@ -505,11 +505,15 @@ async def _publish_to_max(migration_id: uuid.UUID):
             )
             units_with_posts = result.all()
 
+        published_so_far = 0
+        failed_so_far = 0
         for unit, post in units_with_posts:
             try:
                 await _publish_unit(db, max_client, storage, chat_id, unit, post)
+                published_so_far += 1
             except Exception as e:
                 logger.exception("Failed to publish unit %s", unit.id)
+                failed_so_far += 1
                 async with async_session() as db:
                     await db.execute(
                         update(PublishUnit)
@@ -519,6 +523,16 @@ async def _publish_to_max(migration_id: uuid.UUID):
                             error_text=str(e)[:500],
                             retry_count=PublishUnit.retry_count + 1,
                         )
+                    )
+                    await db.commit()
+
+            # Update progress after each unit
+            if (published_so_far + failed_so_far) % 5 == 0 or published_so_far + failed_so_far == len(units_with_posts):
+                async with async_session() as db:
+                    await db.execute(
+                        update(Migration)
+                        .where(Migration.id == migration_id)
+                        .values(published_units=published_so_far, failed_units=failed_so_far)
                     )
                     await db.commit()
 
