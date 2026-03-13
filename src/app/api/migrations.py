@@ -176,8 +176,6 @@ async def start_publish(
         raise HTTPException(409, "Full media preparation is still in progress.")
     if migration.selected_posts_count <= 0:
         raise HTTPException(400, "No selected posts to publish.")
-    if migration.downloaded_media < migration.prepared_media_total:
-        raise HTTPException(409, "Full media is not prepared yet. Run prepare step first.")
 
     try:
         await transition(db, migration_id, MigrationStatus.publishing)

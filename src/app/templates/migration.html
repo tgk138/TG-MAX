@@ -636,11 +636,8 @@ function renderData(d) {
     }
 
     if (autoStartPublish && d.status === 'imported' && !d.preparing_media) {
-        const prep = d.pipeline?.prepare || { done: 0, total: 0 };
-        if ((prep.total === 0 && d.selected_posts_count > 0) || prep.done >= prep.total) {
-            autoStartPublish = false;
-            startPublish();
-        }
+        autoStartPublish = false;
+        startPublish();
     }
 }
 
