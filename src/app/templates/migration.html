@@ -653,7 +653,7 @@ async function startPublish() {
 
 window.confirmAndStartPublish = async function() {
     try {
-        if (!migrationState || migrationState.status !== 'imported') throw new Error('Миграция ещё не готова');
+        if (!migrationState || !['imported','done','failed'].includes(migrationState.status)) throw new Error('Миграция ещё не готова');
         if ((migrationState.selected_posts_count || 0) <= 0) throw new Error('Выберите минимум один пост');
 
         const select = document.getElementById('max-target-select');
